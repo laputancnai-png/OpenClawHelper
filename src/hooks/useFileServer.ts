@@ -35,17 +35,11 @@ export type FileContent = {
 
 /**
  * Returns the relative path for an agent's SOUL.md.
- * - "main" agent (root workspace): "SOUL.md"
- * - other agents: ".agents/<id>/SOUL.md"
- *
- * This matches the OpenClawHelper layout convention:
- *   ~/.openclaw/workspace/SOUL.md             ← main agent
- *   ~/.openclaw/Agents/<id>/agent/SOUL.md     ← sub-agents
+ * OpenClaw multi-agent layout convention:
+ *   ~/.openclaw/workspace-<id>/SOUL.md
  */
 export function soulPath(agentId: string): string {
-  return agentId === "main"
-    ? "workspace/SOUL.md"
-    : `Agents/${agentId}/agent/SOUL.md`;
+  return `workspace-${agentId}/SOUL.md`;
 }
 
 // ── Core fetch helpers ────────────────────────────────────────────────────────
@@ -64,7 +58,7 @@ export type UseFileServerReturn = {
   workspace: WorkspaceInfo | null;
   reloadWorkspace: () => Promise<void>;
 
-  // Read a workspace file (e.g. SOUL.md, .agents/writer/SOUL.md)
+  // Read a workspace file (e.g. workspace-main/SOUL.md, workspace-writer/SOUL.md)
   readFile: (relPath: string) => Promise<FileContent>;
 
   // Write a workspace file — creates dirs if needed

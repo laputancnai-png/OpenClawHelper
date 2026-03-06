@@ -604,16 +604,15 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       ? cfgPath.slice(0, -"/openclaw.json".length)
       : "";
     const defaultsWorkspace = String(snapshot.config?.agents?.defaults?.workspace || "");
-    const inferredRoot = defaultsWorkspace.endsWith("/workspace")
-      ? defaultsWorkspace.slice(0, -"/workspace".length)
-      : cfgRoot;
+    const wsMatch = defaultsWorkspace.match(/^(.*)\/workspace(?:-[^/]+)?$/);
+    const inferredRoot = wsMatch?.[1] || cfgRoot;
     const openclawRoot = inferredRoot || "/home/yufengw/.openclaw";
 
     const managedAgentEntry = (agentId, existing = {}) => ({
       ...existing,
       id: agentId,
-      workspace: `${openclawRoot}/Agents/${agentId}/workspace`,
-      agentDir: `${openclawRoot}/Agents/${agentId}/agent`,
+      workspace: `${openclawRoot}/workspace-${agentId}`,
+      agentDir: `${openclawRoot}/agents/${agentId}/agent`,
     });
 
     let newAgentList;
@@ -636,7 +635,7 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       const hasMain = newAgentList.some(a => a.id === "main");
       if (!hasMain) {
         const existingMain = existingList.find(a => a.id === "main");
-        if (existingMain) newAgentList.unshift(existingMain);
+        if (existingMain) newAgentList.unshift(managedAgentEntry("main", existingMain));
       }
     }
 

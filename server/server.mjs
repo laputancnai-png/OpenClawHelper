@@ -112,7 +112,7 @@ async function handleHealth(req, res) {
 
 /**
  * GET /api/workspace
- * Returns list of agents (from .agents/ subdirs) and which SOUL.md files exist.
+ * Returns list of agents (from agents/<id>/ subdirs) and which workspace-<id>/SOUL.md files exist.
  */
 async function handleWorkspace(req, res) {
   // Read main workspace files
@@ -127,32 +127,32 @@ async function handleWorkspace(req, res) {
     }
   }
 
-  // Discover agent subdirs under Agents/<id>/agent/
-  const agentsDir = path.join(OPENCLAW_HOME, "Agents");
+  // Discover agents from ~/.openclaw/agents/<id>/ and map SOUL to workspace-<id>/SOUL.md
+  const agentsMetaDir = path.join(OPENCLAW_HOME, "agents");
   const agents = [];
   try {
-    const entries = await fs.readdir(agentsDir, { withFileTypes: true });
+    const entries = await fs.readdir(agentsMetaDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const agentId = entry.name;
-      const soulPath = path.join(agentsDir, agentId, "agent", "SOUL.md");
+      const soulPath = path.join(OPENCLAW_HOME, `workspace-${agentId}`, "SOUL.md");
       let hasSoul = false;
       try {
         await fs.access(soulPath);
         hasSoul = true;
       } catch {}
-      agents.push({ id: agentId, hasSoul, soulRelPath: `Agents/${agentId}/agent/SOUL.md` });
+      agents.push({ id: agentId, hasSoul, soulRelPath: `workspace-${agentId}/SOUL.md` });
     }
   } catch {
-    // Agents/ doesn't exist yet — fine
+    // agents/ doesn't exist yet — fine
   }
 
   json(res, 200, { workspace: WORKSPACE, rootFiles, agents });
 }
 
 /**
- * GET /api/file?path=workspace/SOUL.md
- * GET /api/file?path=Agents/writer/agent/SOUL.md
+ * GET /api/file?path=workspace-main/SOUL.md
+ * GET /api/file?path=workspace-writer/SOUL.md
  */
 async function handleFileRead(req, res, relPath) {
   if (!relPath) return json(res, 400, { error: "path query param required" });
@@ -178,7 +178,7 @@ async function handleFileRead(req, res, relPath) {
 }
 
 /**
- * PUT /api/file?path=workspace/SOUL.md
+ * PUT /api/file?path=workspace-main/SOUL.md
  * Body: plain text content of the file
  */
 async function handleFileWrite(req, res, relPath) {
@@ -199,7 +199,7 @@ async function handleFileWrite(req, res, relPath) {
   }
 
   try {
-    // Ensure parent directory exists (e.g. Agents/writer/agent/)
+    // Ensure parent directory exists (e.g. workspace-writer/)
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, "utf8");
     const stat = await fs.stat(abs);
@@ -287,9 +287,9 @@ server.listen(PORT, HOST, () => {
 Endpoints:
   GET  /api/health
   GET  /api/workspace
-  GET  /api/file?path=workspace/SOUL.md
-  PUT  /api/file?path=workspace/SOUL.md
-  PUT  /api/file?path=Agents/writer/agent/SOUL.md
+  GET  /api/file?path=workspace-main/SOUL.md
+  PUT  /api/file?path=workspace-main/SOUL.md
+  PUT  /api/file?path=workspace-writer/SOUL.md
 `);
 });
 
