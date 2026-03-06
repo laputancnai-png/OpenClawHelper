@@ -599,6 +599,23 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
 
     // ── Step C: build patch ──────────────────────────────────────────────────
     // Keep existing agents.defaults, only patch agents.list + bindings + session
+    const cfgPath = String(snapshot.path || "");
+    const cfgRoot = cfgPath.endsWith("/openclaw.json")
+      ? cfgPath.slice(0, -"/openclaw.json".length)
+      : "";
+    const defaultsWorkspace = String(snapshot.config?.agents?.defaults?.workspace || "");
+    const inferredRoot = defaultsWorkspace.endsWith("/workspace")
+      ? defaultsWorkspace.slice(0, -"/workspace".length)
+      : cfgRoot;
+    const openclawRoot = inferredRoot || "/home/yufengw/.openclaw";
+
+    const managedAgentEntry = (agentId, existing = {}) => ({
+      ...existing,
+      id: agentId,
+      workspace: `${openclawRoot}/Agents/${agentId}/workspace`,
+      agentDir: `${openclawRoot}/Agents/${agentId}/agent`,
+    });
+
     let newAgentList;
     if (editMode) {
       const existingList = (baseAgentList && baseAgentList.length > 0)
@@ -607,15 +624,12 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       const pickedIds = new Set(agents.map(a => a.agentId));
       const patchedPicked = agents.map(a => {
         const existing = existingList.find(item => item.id === a.agentId);
-        return existing ?? { id: a.agentId };
+        return managedAgentEntry(a.agentId, existing ?? {});
       });
       const untouched = existingList.filter(item => !pickedIds.has(item.id));
       newAgentList = [...untouched, ...patchedPicked];
     } else {
-      newAgentList = agents.map(a => ({
-        id: a.agentId,
-        // workspace is inherited from agents.defaults — no need to repeat it
-      }));
+      newAgentList = agents.map(a => managedAgentEntry(a.agentId));
 
       // Always keep "main" in the list if it's not being replaced
       const existingList = snapshot.config?.agents?.list ?? [];
@@ -679,7 +693,7 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       log(true, "Gateway 重启中，稍后刷新页面可确认状态");
       setLaunchStatus("success");
     }
-  }, [agents, souls, rules, privacy, writeSoul, wsConnected, wsState]);
+  }, [agents, souls, rules, privacy, writeSoul, wsConnected, wsState, editMode, baseAgentList, baseBindings]);
 
   const cleanupOldMainSessions = useCallback(async () => {
     setCleanupStatus("running");

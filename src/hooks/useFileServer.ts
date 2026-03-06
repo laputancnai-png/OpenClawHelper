@@ -38,12 +38,14 @@ export type FileContent = {
  * - "main" agent (root workspace): "SOUL.md"
  * - other agents: ".agents/<id>/SOUL.md"
  *
- * This matches the real OpenClaw workspace layout:
- *   ~/.openclaw/workspace/SOUL.md           ← main agent
- *   ~/.openclaw/workspace/.agents/X/SOUL.md ← sub-agents
+ * This matches the OpenClawHelper layout convention:
+ *   ~/.openclaw/workspace/SOUL.md             ← main agent
+ *   ~/.openclaw/Agents/<id>/agent/SOUL.md     ← sub-agents
  */
 export function soulPath(agentId: string): string {
-  return agentId === "main" ? "SOUL.md" : `.agents/${agentId}/SOUL.md`;
+  return agentId === "main"
+    ? "workspace/SOUL.md"
+    : `Agents/${agentId}/agent/SOUL.md`;
 }
 
 // ── Core fetch helpers ────────────────────────────────────────────────────────

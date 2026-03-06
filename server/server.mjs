@@ -32,6 +32,7 @@ const HOST = "127.0.0.1"; // loopback only — never expose externally
 // Resolve workspace: honours OPENCLAW_WORKSPACE env var, else default
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE
   ?? path.join(os.homedir(), ".openclaw", "workspace");
+const OPENCLAW_HOME = path.dirname(WORKSPACE);
 
 // Files we allow reading/writing (whitelist approach — security matters)
 const ALLOWED_FILES = new Set([
@@ -51,13 +52,13 @@ const ALLOWED_FILES = new Set([
  * Returns absolute path or throws if path escapes workspace (path traversal).
  */
 function resolveSafe(relPath) {
-  // Normalise and strip any leading slashes/dots
-  const clean = path.normalize(relPath).replace(/^(\.\.[/\\])+/, "");
-  const abs = path.resolve(WORKSPACE, clean);
+  // Normalise and resolve relative to OpenClaw home (~/.openclaw)
+  const clean = path.normalize(relPath).replace(/^[/\\]+/, "");
+  const abs = path.resolve(OPENCLAW_HOME, clean);
 
-  // Must stay inside workspace
-  if (!abs.startsWith(WORKSPACE + path.sep) && abs !== WORKSPACE) {
-    throw new Error(`Path escapes workspace: ${relPath}`);
+  // Must stay inside OpenClaw home
+  if (!abs.startsWith(OPENCLAW_HOME + path.sep) && abs !== OPENCLAW_HOME) {
+    throw new Error(`Path escapes OpenClaw home: ${relPath}`);
   }
 
   // Filename must be in allowlist
@@ -114,7 +115,7 @@ async function handleHealth(req, res) {
  * Returns list of agents (from .agents/ subdirs) and which SOUL.md files exist.
  */
 async function handleWorkspace(req, res) {
-  // Read root workspace files
+  // Read main workspace files
   const rootFiles = {};
   for (const name of ALLOWED_FILES) {
     const abs = path.join(WORKSPACE, name);
@@ -126,32 +127,32 @@ async function handleWorkspace(req, res) {
     }
   }
 
-  // Discover agent subdirs under .agents/
-  const agentsDir = path.join(WORKSPACE, ".agents");
+  // Discover agent subdirs under Agents/<id>/agent/
+  const agentsDir = path.join(OPENCLAW_HOME, "Agents");
   const agents = [];
   try {
     const entries = await fs.readdir(agentsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const agentId = entry.name;
-      const soulPath = path.join(agentsDir, agentId, "SOUL.md");
+      const soulPath = path.join(agentsDir, agentId, "agent", "SOUL.md");
       let hasSoul = false;
       try {
         await fs.access(soulPath);
         hasSoul = true;
       } catch {}
-      agents.push({ id: agentId, hasSoul, soulRelPath: `.agents/${agentId}/SOUL.md` });
+      agents.push({ id: agentId, hasSoul, soulRelPath: `Agents/${agentId}/agent/SOUL.md` });
     }
   } catch {
-    // .agents/ doesn't exist yet — fine, no sub-agents
+    // Agents/ doesn't exist yet — fine
   }
 
   json(res, 200, { workspace: WORKSPACE, rootFiles, agents });
 }
 
 /**
- * GET /api/file?path=SOUL.md
- * GET /api/file?path=.agents/writer/SOUL.md
+ * GET /api/file?path=workspace/SOUL.md
+ * GET /api/file?path=Agents/writer/agent/SOUL.md
  */
 async function handleFileRead(req, res, relPath) {
   if (!relPath) return json(res, 400, { error: "path query param required" });
@@ -177,7 +178,7 @@ async function handleFileRead(req, res, relPath) {
 }
 
 /**
- * PUT /api/file?path=SOUL.md
+ * PUT /api/file?path=workspace/SOUL.md
  * Body: plain text content of the file
  */
 async function handleFileWrite(req, res, relPath) {
@@ -198,7 +199,7 @@ async function handleFileWrite(req, res, relPath) {
   }
 
   try {
-    // Ensure parent directory exists (e.g. .agents/writer/)
+    // Ensure parent directory exists (e.g. Agents/writer/agent/)
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, "utf8");
     const stat = await fs.stat(abs);
@@ -286,9 +287,9 @@ server.listen(PORT, HOST, () => {
 Endpoints:
   GET  /api/health
   GET  /api/workspace
-  GET  /api/file?path=SOUL.md
-  PUT  /api/file?path=SOUL.md
-  PUT  /api/file?path=.agents/writer/SOUL.md
+  GET  /api/file?path=workspace/SOUL.md
+  PUT  /api/file?path=workspace/SOUL.md
+  PUT  /api/file?path=Agents/writer/agent/SOUL.md
 `);
 });
 
