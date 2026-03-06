@@ -518,12 +518,20 @@ function Step2({picked,souls,agentsDocs,userDocs,onSoulChange,onAgentsDocChange,
       )}
 
       <div style={{display:"flex",gap:0,background:"#F2F3FF",borderRadius:12,padding:3,marginBottom:14,width:"fit-content"}}>
-        {[ ["soul","✨ SOUL.md"], ["agents","📘 AGENTS.md"], ["user","👤 USER.md"] ].map(([id,lbl])=>(
-          <button key={id} onClick={()=>setDocTab(id)}
-            style={{background:docTab===id?"#fff":"none",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:"pointer",color:docTab===id?P.ink:P.soft}}>
-            {lbl}
-          </button>
-        ))}
+        {[ ["soul","✨ SOUL.md"], ["agents","📘 AGENTS.md"], ["user","👤 USER.md"] ].map(([id,lbl])=>{
+          const filled = id==="soul"
+            ? !!(souls[agent.label]||"").trim()
+            : id==="agents"
+              ? !!(agentsDocs[agent.label]||"").trim()
+              : !!(userDocs[agent.label]||"").trim();
+          return(
+            <button key={id} onClick={()=>setDocTab(id)}
+              style={{background:docTab===id?"#fff":"none",border:"none",borderRadius:10,padding:"7px 12px",fontSize:13,fontWeight:700,cursor:"pointer",color:docTab===id?P.ink:P.soft,display:"inline-flex",alignItems:"center",gap:8}}>
+              <span>{lbl}</span>
+              <span title={filled?"已填写":"未填写"} style={{width:9,height:9,borderRadius:"50%",display:"inline-block",background:filled?P.teal:"#D8D8E8",boxShadow:filled?`0 0 0 2px ${P.teal}22`:"none"}}/>
+            </button>
+          );
+        })}
       </div>
 
       {docTab==="soul" && <SoulEditor agent={agent} soul={souls[agent.label]||""} onChange={v=>onSoulChange(agent.label,v)}/>}
