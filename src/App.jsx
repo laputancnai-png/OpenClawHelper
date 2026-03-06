@@ -537,6 +537,8 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
   const [launchStatus, setLaunchStatus] = useState("idle");
   const [launchLog,    setLaunchLog]    = useState([]);  // [{ok, msg}]
   const [errorMsg,     setErrorMsg]     = useState("");
+  const [cleanupStatus, setCleanupStatus] = useState("idle"); // idle|running|done|error
+  const [cleanupMsg, setCleanupMsg] = useState("");
 
   const log = (ok, msg) => setLaunchLog(prev => [...prev, {ok, msg}]);
 
@@ -658,6 +660,53 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
       setLaunchStatus("success");
     }
   }, [agents, souls, rules, privacy, writeSoul, wsConnected, wsState]);
+
+  const cleanupOldMainSessions = useCallback(async () => {
+    setCleanupStatus("running");
+    setCleanupMsg("");
+    try {
+      const client = getGatewayClient();
+      const routedChannels = Array.from(new Set((rules || [])
+        .filter(r => r.channelId && r.channelId !== "any")
+        .filter(r => (r.agent?.agentId ?? "") !== "main")
+        .map(r => r.channelId)));
+
+      if (routedChannels.length === 0) {
+        setCleanupStatus("done");
+        setCleanupMsg("没有可清理的旧 main 会话（当前没有路由到非 main 的指定渠道）。");
+        return;
+      }
+
+      const listed = await client.sessionsList(300);
+      const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
+
+      const targets = keys.filter((key) =>
+        routedChannels.some((ch) => key.startsWith(`agent:main:${ch}:`) || key === `agent:main:${ch}`)
+      );
+
+      if (targets.length === 0) {
+        setCleanupStatus("done");
+        setCleanupMsg("没有发现旧 main 会话需要清理。");
+        return;
+      }
+
+      let ok = 0;
+      for (const key of targets) {
+        try {
+          const res = await client.sessionsDelete(key);
+          if (res?.ok) ok += 1;
+        } catch {
+          // continue cleanup best-effort
+        }
+      }
+
+      setCleanupStatus("done");
+      setCleanupMsg(`已清理 ${ok}/${targets.length} 个旧 main 会话。`);
+    } catch (e) {
+      setCleanupStatus("error");
+      setCleanupMsg(`清理失败：${e?.message ?? String(e)}`);
+    }
+  }, [rules]);
 
   // ── Render: idle (summary) ─────────────────────────────────────────────────
   if (launchStatus === "idle") return (
@@ -791,13 +840,28 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
       </div>
       {/* Launch log */}
       <div style={{background:"#F8F8FF",border:"2px solid #E8E8F5",borderRadius:14,
-        padding:"14px 18px",textAlign:"left",maxWidth:420,margin:"0 auto 20px"}}>
+        padding:"14px 18px",textAlign:"left",maxWidth:420,margin:"0 auto 14px"}}>
         {launchLog.map((l,i)=>(
           <div key={i} style={{display:"flex",gap:10,padding:"4px 0",fontSize:12,color:P.soft}}>
             <span>{l.ok?"✅":"❌"}</span><span>{l.msg}</span>
           </div>
         ))}
       </div>
+
+      <div style={{background:"#FFF8E8",border:"2px solid #FFE0A3",borderRadius:14,
+        padding:"12px 16px",maxWidth:420,margin:"0 auto 18px",textAlign:"left"}}>
+        <div style={{fontSize:12,fontWeight:800,color:"#8A6A00",marginBottom:6}}>🧹 可选：清理旧 main 会话</div>
+        <div style={{fontSize:12,color:P.soft,lineHeight:1.5,marginBottom:10}}>
+          防止之前旧线程继续粘在 main。建议首次切换路由后执行一次。
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <Btn small color={P.amber} onClick={cleanupOldMainSessions} disabled={cleanupStatus==="running"}>
+            {cleanupStatus==="running"?"清理中…":"清理旧 main 会话"}
+          </Btn>
+          {cleanupMsg && <span style={{fontSize:11,color:cleanupStatus==="error"?P.coral:P.teal,fontWeight:700}}>{cleanupMsg}</span>}
+        </div>
+      </div>
+
       <Btn ghost onClick={onEdit} small>✏️ 修改配置</Btn>
     </div>
   );

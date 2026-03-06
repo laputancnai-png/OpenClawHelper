@@ -181,3 +181,30 @@ export type OpenClawConfig = {
   auth?: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+// ── sessions.list / sessions.delete (for optional cleanup) ───────────────────
+
+export type SessionsListParams = {
+  limit?: number;
+};
+
+export type SessionListItem = {
+  key: string;
+  [key: string]: unknown;
+};
+
+export type SessionsListResult = {
+  sessions?: SessionListItem[];
+  [key: string]: unknown;
+};
+
+export type SessionsDeleteParams = {
+  key: string;
+};
+
+export type SessionsDeleteResult = {
+  ok: boolean;
+  key: string;
+  deleted?: boolean;
+  archived?: string[];
+};

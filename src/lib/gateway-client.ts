@@ -23,6 +23,8 @@ import type {
   ConfigApplyParams,
   ConfigMutateResult,
   GatewayError,
+  SessionsListResult,
+  SessionsDeleteResult,
 } from "./gateway-ws-types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -164,6 +166,14 @@ export class GatewayClient {
       ...params,
       baseHash,
     });
+  }
+
+  async sessionsList(limit = 100): Promise<SessionsListResult> {
+    return this._request<SessionsListResult>("sessions.list", { limit });
+  }
+
+  async sessionsDelete(key: string): Promise<SessionsDeleteResult> {
+    return this._request<SessionsDeleteResult>("sessions.delete", { key });
   }
 
   // ── Core RPC ────────────────────────────────────────────────────────────────
