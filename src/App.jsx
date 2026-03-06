@@ -137,7 +137,7 @@ const EASY_FIELDS=[
 ];
 
 const STEPS=[
-  {n:1,emoji:"🤖",label:"选助手"},{n:2,emoji:"✨",label:"写性格"},
+  {n:1,emoji:"🤖",label:"选助手"},{n:2,emoji:"📝",label:"写文档"},
   {n:3,emoji:"🔗",label:"连渠道"},{n:4,emoji:"🔒",label:"隐私"},{n:5,emoji:"🚀",label:"完成"},
 ];
 
@@ -248,7 +248,7 @@ function Step1({picked,onToggle,onNext}){
         </div>
       )}
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={onNext} disabled={picked.length===0}>下一步：写助手性格 →</Btn>
+        <Btn onClick={onNext} disabled={picked.length===0}>下一步：写助手文档 →</Btn>
       </div>
     </div>
   );
@@ -380,27 +380,31 @@ function SoulEditor({agent,soul,onChange}){
   );
 }
 
-function Step2({picked,souls,onSoulChange,onNext,onBack}){
+function Step2({picked,souls,agentsDocs,userDocs,onSoulChange,onAgentsDocChange,onUserDocChange,onNext,onBack}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const [cur,setCur]=useState(0);
+  const [docTab,setDocTab]=useState("soul");
   const agent=agents[cur];
+  const t=AGENT_TEMPLATES.find(x=>x.label===agent.label);
+  const [bg,border,dot]=cardC(t.cardColor);
+
   return(
     <div className="slide-up">
       <div style={{textAlign:"center",marginBottom:24}}>
-        <div style={{fontSize:44,marginBottom:8}}>✨</div>
-        <h2 style={{fontFamily:"Fredoka One,cursive",fontSize:26,color:P.ink,margin:"0 0 6px"}}>给每个助手写「性格说明书」</h2>
-        <p style={{fontSize:14,color:P.soft,margin:0}}>不写也没关系，有默认设定可以用！</p>
+        <div style={{fontSize:44,marginBottom:8}}>📝</div>
+        <h2 style={{fontFamily:"Fredoka One,cursive",fontSize:26,color:P.ink,margin:"0 0 6px"}}>给每个助手完善文档</h2>
+        <p style={{fontSize:14,color:P.soft,margin:0}}>SOUL.md / AGENTS.md / USER.md 都可以在这里编辑</p>
       </div>
       {agents.length>1&&(
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {agents.map((a,i)=>{
-            const[bg,border,dot]=cardC(a.cardColor);
-            const filled=!!souls[a.label]?.trim();
+            const[abg,aborder]=cardC(a.cardColor);
+            const filled=!!souls[a.label]?.trim()||!!agentsDocs[a.label]?.trim()||!!userDocs[a.label]?.trim();
             return(
               <div key={a.label} onClick={()=>setCur(i)}
                 style={{display:"flex",alignItems:"center",gap:7,padding:"7px 14px",
-                  borderRadius:14,cursor:"pointer",border:`2px solid ${cur===i?border:"#E8E8F5"}`,
-                  background:cur===i?bg:P.white,transition:"all 0.15s"}}>
+                  borderRadius:14,cursor:"pointer",border:`2px solid ${cur===i?aborder:"#E8E8F5"}`,
+                  background:cur===i?abg:P.white,transition:"all 0.15s"}}>
                 <span style={{fontSize:18}}>{a.emoji}</span>
                 <span style={{fontFamily:"Fredoka One,cursive",fontSize:13,color:P.ink}}>{a.label}</span>
                 {filled&&<span style={{fontSize:10,color:P.teal,fontWeight:800}}>✓</span>}
@@ -409,7 +413,41 @@ function Step2({picked,souls,onSoulChange,onNext,onBack}){
           })}
         </div>
       )}
-      <SoulEditor agent={agent} soul={souls[agent.label]||""} onChange={v=>onSoulChange(agent.label,v)}/>
+
+      <div style={{display:"flex",gap:0,background:"#F2F3FF",borderRadius:12,padding:3,marginBottom:14,width:"fit-content"}}>
+        {[ ["soul","✨ SOUL.md"], ["agents","📘 AGENTS.md"], ["user","👤 USER.md"] ].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setDocTab(id)}
+            style={{background:docTab===id?"#fff":"none",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:"pointer",color:docTab===id?P.ink:P.soft}}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {docTab==="soul" && <SoulEditor agent={agent} soul={souls[agent.label]||""} onChange={v=>onSoulChange(agent.label,v)}/>}
+
+      {docTab!=="soul" && (
+        <div style={{background:P.white,border:`3px solid ${border}`,borderRadius:22,overflow:"hidden",boxShadow:`0 6px 24px ${border}55`}}>
+          <div style={{background:bg,padding:"14px 18px",borderBottom:`2px solid ${border}66`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontFamily:"Fredoka One,cursive",fontSize:17,color:P.ink}}>
+              {docTab==="agents"?"📘 AGENTS.md":"👤 USER.md"}
+            </div>
+            <Btn small color={dot} onClick={()=>{
+              if(docTab==="agents") onAgentsDocChange(agent.label, starterAgentsMd(agent.label));
+              else onUserDocChange(agent.label, starterUserMd());
+            }}>用模板</Btn>
+          </div>
+          <div style={{padding:"18px 20px"}}>
+            <textarea
+              rows={14}
+              value={docTab==="agents"?(agentsDocs[agent.label]||""):(userDocs[agent.label]||"")}
+              onChange={e=>docTab==="agents"?onAgentsDocChange(agent.label,e.target.value):onUserDocChange(agent.label,e.target.value)}
+              placeholder={docTab==="agents"?starterAgentsMd(agent.label):starterUserMd()}
+              style={{width:"100%",padding:"14px 16px",borderRadius:14,border:"2px solid #E8E8F5",fontSize:13,fontFamily:"'Courier New',Courier,monospace",lineHeight:1.7,resize:"vertical",background:"#FCFCFF",color:P.ink}}
+            />
+          </div>
+        </div>
+      )}
+
       <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
         <Btn ghost onClick={onBack}>← 上一步</Btn>
         <Btn onClick={onNext} color={P.indigo}>下一步：连接渠道 →</Btn>
@@ -558,7 +596,7 @@ function Step4({privacy,setPrivacy,onNext,onBack}){
 }
 
 // ── Step 5: Launch — REAL Gateway + FileServer ─────────────────────────────────
-function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=false,baseAgentList=[],baseBindings=[]}){
+function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnected,wsState,editMode=false,baseAgentList=[],baseBindings=[]}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const privOpt=PRIVACY_OPTIONS.find(p=>p.id===privacy);
   const { writeSoul, readFile, writeFile, status: fsStatus } = useFileServer();
@@ -619,11 +657,23 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
           log(true, `${agent.emoji} ${agent.label}：性格说明书已保存 ✓`);
         }
 
-        const createdAgents = await ensureAgentDoc(agent.agentId, "AGENTS.md", starterAgentsMd(agent.label));
-        const createdUser = await ensureAgentDoc(agent.agentId, "USER.md", starterUserMd());
-        if (createdAgents || createdUser) {
-          const names = [createdAgents ? "AGENTS.md" : null, createdUser ? "USER.md" : null].filter(Boolean).join(" + ");
-          log(true, `${agent.emoji} ${agent.label}：已初始化 ${names}`);
+        const agentsDoc = (agentsDocs?.[agent.label] || "").trim();
+        const userDoc = (userDocs?.[agent.label] || "").trim();
+
+        if (agentsDoc) {
+          await writeFile(agentFilePath(agent.agentId, "AGENTS.md"), agentsDocs[agent.label]);
+          log(true, `${agent.emoji} ${agent.label}：AGENTS.md 已保存 ✓`);
+        } else {
+          const createdAgents = await ensureAgentDoc(agent.agentId, "AGENTS.md", starterAgentsMd(agent.label));
+          if (createdAgents) log(true, `${agent.emoji} ${agent.label}：已初始化 AGENTS.md`);
+        }
+
+        if (userDoc) {
+          await writeFile(agentFilePath(agent.agentId, "USER.md"), userDocs[agent.label]);
+          log(true, `${agent.emoji} ${agent.label}：USER.md 已保存 ✓`);
+        } else {
+          const createdUser = await ensureAgentDoc(agent.agentId, "USER.md", starterUserMd());
+          if (createdUser) log(true, `${agent.emoji} ${agent.label}：已初始化 USER.md`);
         }
       } catch(e) {
         log(false, `${agent.emoji} ${agent.label}：文件写入失败 — ${e.message}`);
@@ -741,7 +791,7 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       log(true, "Gateway 重启中，稍后刷新页面可确认状态");
       setLaunchStatus("success");
     }
-  }, [agents, souls, rules, privacy, writeSoul, readFile, writeFile, wsConnected, wsState, editMode, baseAgentList, baseBindings]);
+  }, [agents, souls, agentsDocs, userDocs, rules, privacy, writeSoul, readFile, writeFile, wsConnected, wsState, editMode, baseAgentList, baseBindings]);
 
   const cleanupOldMainSessions = useCallback(async () => {
     setCleanupStatus("running");
@@ -1135,6 +1185,8 @@ export default function App(){
   const [step,    setStep]    = useState(1);
   const [picked,  setPicked]  = useState([]);
   const [souls,   setSouls]   = useState({});
+  const [agentsDocs, setAgentsDocs] = useState({});
+  const [userDocs, setUserDocs] = useState({});
   const [rules,   setRules]   = useState([]);
   const [privacy, setPrivacy] = useState("per-channel-peer");
   const [wsState, setWsState] = useState("disconnected");
@@ -1142,6 +1194,7 @@ export default function App(){
   const [editMode, setEditMode] = useState(false);
   const [baseAgentList, setBaseAgentList] = useState([]);
   const [baseBindings, setBaseBindings] = useState([]);
+  const { readFile } = useFileServer();
 
   const connectGateway = useCallback((nextToken) => {
     const client = getGatewayClient();
@@ -1177,7 +1230,23 @@ export default function App(){
 
     setEditMode(true);
     setPicked([tmpl.label]);
-    setSouls({ [tmpl.label]: souls[tmpl.label] ?? "" });
+
+    const loadDoc = async (filename, fallback = "") => {
+      try {
+        const f = await readFile(agentFilePath(agentId, filename));
+        return f.content || fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
+    const loadedSoul = await loadDoc("SOUL.md", souls[tmpl.label] ?? "");
+    const loadedAgents = await loadDoc("AGENTS.md", starterAgentsMd(tmpl.label));
+    const loadedUser = await loadDoc("USER.md", starterUserMd());
+
+    setSouls({ [tmpl.label]: loadedSoul });
+    setAgentsDocs({ [tmpl.label]: loadedAgents });
+    setUserDocs({ [tmpl.label]: loadedUser });
     setPrivacy(snapshot.config?.session?.dmScope ?? "per-channel-peer");
 
     const list = snapshot.config?.agents?.list ?? [];
@@ -1195,7 +1264,7 @@ export default function App(){
 
     setRules(existingRules);
     setStep(2);
-  }, [souls]);
+  }, [souls, readFile]);
 
   return(
     <>
@@ -1248,8 +1317,10 @@ export default function App(){
             {step===1&&<Step1 picked={picked}
               onToggle={l=>{setEditMode(false);setPicked(p=>p.includes(l)?p.filter(x=>x!==l):[...p,l]);}}
               onNext={()=>{setEditMode(false);setStep(2);}}/>}
-            {step===2&&<Step2 picked={picked} souls={souls}
+            {step===2&&<Step2 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs}
               onSoulChange={(l,v)=>setSouls(s=>({...s,[l]:v}))}
+              onAgentsDocChange={(l,v)=>setAgentsDocs(s=>({...s,[l]:v}))}
+              onUserDocChange={(l,v)=>setUserDocs(s=>({...s,[l]:v}))}
               onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>}
             {step===3&&<Step3 picked={picked} rules={rules}
               onAddRule={r=>setRules(p=>[...p,r])}
@@ -1257,7 +1328,7 @@ export default function App(){
               onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>}
             {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
               onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
-            {step===5&&<Step5 picked={picked} souls={souls} rules={rules}
+            {step===5&&<Step5 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs} rules={rules}
               privacy={privacy}
               onEdit={()=>setStep(1)}
               wsConnected={wsState==="connected"}
