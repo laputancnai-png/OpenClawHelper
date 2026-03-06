@@ -967,6 +967,136 @@ function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}
   );
 }
 
+function ExistingAgentsPanel({wsState}){
+  const wsConnected = wsState === "connected";
+  const [agents, setAgents] = useState([]);
+  const [status, setStatus] = useState("idle");
+  const [message, setMessage] = useState("");
+
+  const loadAgents = useCallback(async () => {
+    if (!wsConnected) {
+      setStatus("error");
+      setMessage("Gateway 未连接，无法读取 Agents。请先连接。");
+      return;
+    }
+
+    setStatus("loading");
+    setMessage("");
+    try {
+      const client = getGatewayClient();
+      const snapshot = await client.configGet();
+      const list = snapshot.config?.agents?.list ?? [];
+      setAgents(list.map((a) => ({
+        id: a.id ?? "",
+        workspace: a.workspace ?? "",
+        agentDir: a.agentDir ?? "",
+        default: !!a.default,
+      })));
+      setStatus("idle");
+    } catch (e) {
+      setStatus("error");
+      setMessage(`读取 Agents 失败：${e?.message ?? String(e)}`);
+    }
+  }, [wsConnected]);
+
+  useEffect(() => {
+    if (wsConnected) loadAgents();
+  }, [wsConnected, loadAgents]);
+
+  const updateField = (idx, field, value) => {
+    setAgents(prev => prev.map((a, i) => i === idx ? {...a, [field]: value} : a));
+  };
+
+  const saveAgents = useCallback(async () => {
+    if (!wsConnected) {
+      setStatus("error");
+      setMessage("Gateway 未连接，无法保存。请先连接。");
+      return;
+    }
+
+    const hasInvalid = agents.some(a => !a.id.trim() || !a.workspace.trim());
+    if (hasInvalid) {
+      setStatus("error");
+      setMessage("每个 Agent 必须填写 id 和 workspace。请补全后再保存。");
+      return;
+    }
+
+    setStatus("saving");
+    setMessage("");
+
+    try {
+      const client = getGatewayClient();
+      const snap = await client.configGet();
+      const patch = {
+        agents: {
+          list: agents.map(a => ({
+            id: a.id.trim(),
+            workspace: a.workspace.trim(),
+            ...(a.agentDir?.trim() ? { agentDir: a.agentDir.trim() } : {}),
+            ...(a.default ? { default: true } : {}),
+          })),
+        },
+      };
+
+      await client.configPatch({
+        raw: JSON.stringify(patch, null, 2),
+        baseHash: snap.hash,
+        note: "OpenClawHelper: edit existing agents",
+        restartDelayMs: 2000,
+      });
+
+      setStatus("success");
+      setMessage("Agents 已保存，Gateway 将自动重启并加载新配置。");
+      await loadAgents();
+    } catch (e) {
+      setStatus("error");
+      setMessage(`保存失败：${e?.message ?? String(e)}`);
+    }
+  }, [agents, wsConnected, loadAgents]);
+
+  return(
+    <div style={{background:P.white,borderRadius:18,padding:"14px 16px",marginBottom:14,
+      boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <div style={{fontSize:12,fontWeight:800,color:P.soft,letterSpacing:1}}>🧩 现有 Agents</div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn small ghost onClick={loadAgents}>刷新列表</Btn>
+          <Btn small color={P.teal} onClick={saveAgents} disabled={status==="loading"||status==="saving"||!wsConnected}>
+            {status==="saving"?"保存中…":"保存改动"}
+          </Btn>
+        </div>
+      </div>
+
+      {!wsConnected && <div style={{marginTop:10,fontSize:12,color:P.coral,fontWeight:700}}>Gateway 未连接，连接成功后会自动加载。</div>}
+      {wsConnected && status==="loading" && <div style={{marginTop:10,fontSize:12,color:P.soft}}>正在读取 Agents…</div>}
+      {wsConnected && agents.length===0 && status!=="loading" && <div style={{marginTop:10,fontSize:12,color:P.soft}}>当前没有读取到 Agents 列表。</div>}
+
+      {agents.length>0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:10}}>
+          {agents.map((agent, idx) => (
+            <div key={`${agent.id}-${idx}`} style={{background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:14,padding:"10px 12px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1.4fr auto",gap:8,alignItems:"center"}}>
+                <input value={agent.id} onChange={e=>updateField(idx,"id",e.target.value)} placeholder="agent id"
+                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
+                <input value={agent.workspace} onChange={e=>updateField(idx,"workspace",e.target.value)} placeholder="workspace 路径"
+                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
+                <input value={agent.agentDir} onChange={e=>updateField(idx,"agentDir",e.target.value)} placeholder="agentDir（可选）"
+                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:P.soft,fontWeight:700}}>
+                  <input type="checkbox" checked={agent.default} onChange={e=>updateField(idx,"default",e.target.checked)} /> 默认
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:status==="error"?P.coral:P.teal}}>{message}</div>}
+      <div style={{marginTop:8,fontSize:11,color:P.soft}}>在这里可以直接改现有 Agent 的 id/workspace/agentDir，改完点“保存改动”。</div>
+    </div>
+  );
+}
+
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function App(){
   const [step,    setStep]    = useState(1);
@@ -1042,6 +1172,8 @@ export default function App(){
             onSaveToken={saveToken}
             onReconnect={reconnect}
           />
+
+          <ExistingAgentsPanel wsState={wsState} />
 
           <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
             boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
