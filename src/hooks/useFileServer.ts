@@ -134,10 +134,12 @@ export function useFileServer(): UseFileServerReturn {
 
   const deleteAgentFiles = useCallback(async (agentId: string): Promise<void> => {
     try {
-      await fetchJSON(
+      const res = await fetch(
         `${FILE_SERVER}/api/agent?id=${encodeURIComponent(agentId)}`,
-        { method: "DELETE" }
+        { method: "DELETE", signal: AbortSignal.timeout(180000) }
       );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("Unknown endpoint: DELETE /api/agent")) {

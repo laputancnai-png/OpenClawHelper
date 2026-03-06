@@ -1279,7 +1279,13 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
       await new Promise(r => setTimeout(r, 1600));
       await loadAgents();
     } catch (e) {
-      setMessage(`删除失败：${e?.message ?? String(e)}`);
+      const msg = e?.message ?? String(e);
+      if (String(msg).toLowerCase().includes("timed out")) {
+        setMessage("删除请求超时，但可能仍在后台继续执行。正在自动刷新结果…");
+        setTimeout(() => { loadAgents().catch(()=>{}); }, 2500);
+      } else {
+        setMessage(`删除失败：${msg}`);
+      }
     } finally {
       setDeletingId("");
     }
