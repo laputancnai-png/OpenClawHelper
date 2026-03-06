@@ -401,6 +401,10 @@ function DocMaterialEditor({agent,docType,value,onChange}){
   const t=AGENT_TEMPLATES.find(x=>x.label===agent.label);
   const [bg,border,dot]=cardC(t.cardColor);
   const [tab,setTab]=useState("easy");
+
+  useEffect(()=>{
+    setTab("easy");
+  },[docType, agent.label]);
   const [easy,setEasy]=useState({role:"",rules:"",style:"",ban:"",name:"",prefs:"",goals:"",notes:""});
 
   const isAgents = docType === "agents";
