@@ -737,7 +737,9 @@ function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnecte
         await readFile(relPath);
         return false;
       } catch (e) {
-        if (!(e instanceof Error) || !e.message.includes("404")) throw e;
+        const msg = e instanceof Error ? e.message : String(e);
+        const notFound = msg.includes("404") || msg.includes("File not found");
+        if (!notFound) throw e;
         await writeFile(relPath, content);
         return true;
       }
