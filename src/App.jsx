@@ -528,7 +528,7 @@ function Step4({privacy,setPrivacy,onNext,onBack}){
 }
 
 // ── Step 5: Launch — REAL Gateway + FileServer ─────────────────────────────────
-function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
+function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=false,baseAgentList=[],baseBindings=[]}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const privOpt=PRIVACY_OPTIONS.find(p=>p.id===privacy);
   const { writeSoul, status: fsStatus } = useFileServer();
@@ -599,22 +599,35 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
 
     // ── Step C: build patch ──────────────────────────────────────────────────
     // Keep existing agents.defaults, only patch agents.list + bindings + session
-    const newAgentList = agents.map(a => ({
-      id: a.agentId,
-      // workspace is inherited from agents.defaults — no need to repeat it
-    }));
+    let newAgentList;
+    if (editMode) {
+      const existingList = (baseAgentList && baseAgentList.length > 0)
+        ? baseAgentList
+        : (snapshot.config?.agents?.list ?? []);
+      const pickedIds = new Set(agents.map(a => a.agentId));
+      const patchedPicked = agents.map(a => {
+        const existing = existingList.find(item => item.id === a.agentId);
+        return existing ?? { id: a.agentId };
+      });
+      const untouched = existingList.filter(item => !pickedIds.has(item.id));
+      newAgentList = [...untouched, ...patchedPicked];
+    } else {
+      newAgentList = agents.map(a => ({
+        id: a.agentId,
+        // workspace is inherited from agents.defaults — no need to repeat it
+      }));
 
-    // Always keep "main" in the list if it's not being replaced
-    const existingList = snapshot.config?.agents?.list ?? [];
-    const hasMain = newAgentList.some(a => a.id === "main");
-    if (!hasMain) {
-      const existingMain = existingList.find(a => a.id === "main");
-      if (existingMain) newAgentList.unshift(existingMain);
+      // Always keep "main" in the list if it's not being replaced
+      const existingList = snapshot.config?.agents?.list ?? [];
+      const hasMain = newAgentList.some(a => a.id === "main");
+      if (!hasMain) {
+        const existingMain = existingList.find(a => a.id === "main");
+        if (existingMain) newAgentList.unshift(existingMain);
+      }
     }
 
-    const newBindings = rules.map(r => {
+    const mappedBindings = rules.map(r => {
       const tmpl = AGENT_TEMPLATES.find(t => t.label === r.agentLabel);
-      const ch = CHANNEL_OPTIONS.find(c => c.id === r.channelId);
       return {
         agentId: tmpl?.agentId ?? r.agentLabel,
         match: r.channelId === "any"
@@ -622,6 +635,13 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
           : { channel: r.channelId, accountId: "default" },
       };
     });
+
+    const newBindings = editMode
+      ? [
+          ...(baseBindings || []).filter(b => !agents.some(a => a.agentId === b.agentId)),
+          ...mappedBindings,
+        ]
+      : mappedBindings;
 
     const patch = {
       agents: { list: newAgentList },
@@ -967,7 +987,7 @@ function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}
   );
 }
 
-function ExistingAgentsPanel({wsState}){
+function ExistingAgentsPanel({wsState, onEditAgent}){
   const wsConnected = wsState === "connected";
   const [agents, setAgents] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -976,7 +996,7 @@ function ExistingAgentsPanel({wsState}){
   const loadAgents = useCallback(async () => {
     if (!wsConnected) {
       setStatus("error");
-      setMessage("Gateway 未连接，无法读取 Agents。请先连接。");
+      setMessage("Gateway 未连接，无法读取现有 Agents。请先连接。");
       return;
     }
 
@@ -986,12 +1006,17 @@ function ExistingAgentsPanel({wsState}){
       const client = getGatewayClient();
       const snapshot = await client.configGet();
       const list = snapshot.config?.agents?.list ?? [];
-      setAgents(list.map((a) => ({
-        id: a.id ?? "",
-        workspace: a.workspace ?? "",
-        agentDir: a.agentDir ?? "",
-        default: !!a.default,
-      })));
+      setAgents(list.map((a) => {
+        const tmpl = AGENT_TEMPLATES.find(t => t.agentId === a.id);
+        return {
+          id: a.id ?? "",
+          label: tmpl?.label ?? a.id ?? "未命名 Agent",
+          emoji: tmpl?.emoji ?? "🧩",
+          cardColor: tmpl?.cardColor ?? 0,
+          desc: tmpl?.desc ?? "点击进入编辑流程",
+          supported: !!tmpl,
+        };
+      }));
       setStatus("idle");
     } catch (e) {
       setStatus("error");
@@ -1003,96 +1028,42 @@ function ExistingAgentsPanel({wsState}){
     if (wsConnected) loadAgents();
   }, [wsConnected, loadAgents]);
 
-  const updateField = (idx, field, value) => {
-    setAgents(prev => prev.map((a, i) => i === idx ? {...a, [field]: value} : a));
-  };
-
-  const saveAgents = useCallback(async () => {
-    if (!wsConnected) {
-      setStatus("error");
-      setMessage("Gateway 未连接，无法保存。请先连接。");
-      return;
-    }
-
-    const hasInvalid = agents.some(a => !a.id.trim() || !a.workspace.trim());
-    if (hasInvalid) {
-      setStatus("error");
-      setMessage("每个 Agent 必须填写 id 和 workspace。请补全后再保存。");
-      return;
-    }
-
-    setStatus("saving");
-    setMessage("");
-
-    try {
-      const client = getGatewayClient();
-      const snap = await client.configGet();
-      const patch = {
-        agents: {
-          list: agents.map(a => ({
-            id: a.id.trim(),
-            workspace: a.workspace.trim(),
-            ...(a.agentDir?.trim() ? { agentDir: a.agentDir.trim() } : {}),
-            ...(a.default ? { default: true } : {}),
-          })),
-        },
-      };
-
-      await client.configPatch({
-        raw: JSON.stringify(patch, null, 2),
-        baseHash: snap.hash,
-        note: "OpenClawHelper: edit existing agents",
-        restartDelayMs: 2000,
-      });
-
-      setStatus("success");
-      setMessage("Agents 已保存，Gateway 将自动重启并加载新配置。");
-      await loadAgents();
-    } catch (e) {
-      setStatus("error");
-      setMessage(`保存失败：${e?.message ?? String(e)}`);
-    }
-  }, [agents, wsConnected, loadAgents]);
-
   return(
-    <div style={{background:P.white,borderRadius:18,padding:"14px 16px",marginBottom:14,
+    <div style={{background:P.white,borderRadius:18,padding:"16px 18px",marginBottom:14,
       boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <div style={{fontSize:12,fontWeight:800,color:P.soft,letterSpacing:1}}>🧩 现有 Agents</div>
-        <div style={{display:"flex",gap:8}}>
-          <Btn small ghost onClick={loadAgents}>刷新列表</Btn>
-          <Btn small color={P.teal} onClick={saveAgents} disabled={status==="loading"||status==="saving"||!wsConnected}>
-            {status==="saving"?"保存中…":"保存改动"}
-          </Btn>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div>
+          <div style={{fontFamily:"Fredoka One,cursive",fontSize:18,color:P.ink}}>🧩 修改现有 Agents</div>
+          <div style={{fontSize:12,color:P.soft}}>和下方创建流程同风格：先选卡片，再进入同一套编辑步骤</div>
         </div>
+        <Btn small ghost onClick={loadAgents}>刷新列表</Btn>
       </div>
 
-      {!wsConnected && <div style={{marginTop:10,fontSize:12,color:P.coral,fontWeight:700}}>Gateway 未连接，连接成功后会自动加载。</div>}
-      {wsConnected && status==="loading" && <div style={{marginTop:10,fontSize:12,color:P.soft}}>正在读取 Agents…</div>}
-      {wsConnected && agents.length===0 && status!=="loading" && <div style={{marginTop:10,fontSize:12,color:P.soft}}>当前没有读取到 Agents 列表。</div>}
+      {!wsConnected && <div style={{fontSize:12,color:P.coral,fontWeight:700}}>Gateway 未连接，连接后会自动加载。</div>}
+      {wsConnected && status==="loading" && <div style={{fontSize:12,color:P.soft}}>正在读取 Agents…</div>}
+      {wsConnected && agents.length===0 && status!=="loading" && <div style={{fontSize:12,color:P.soft}}>当前没有读取到 Agents 列表。</div>}
 
       {agents.length>0 && (
-        <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:10}}>
-          {agents.map((agent, idx) => (
-            <div key={`${agent.id}-${idx}`} style={{background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:14,padding:"10px 12px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1.4fr auto",gap:8,alignItems:"center"}}>
-                <input value={agent.id} onChange={e=>updateField(idx,"id",e.target.value)} placeholder="agent id"
-                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                <input value={agent.workspace} onChange={e=>updateField(idx,"workspace",e.target.value)} placeholder="workspace 路径"
-                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                <input value={agent.agentDir} onChange={e=>updateField(idx,"agentDir",e.target.value)} placeholder="agentDir（可选）"
-                  style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:P.soft,fontWeight:700}}>
-                  <input type="checkbox" checked={agent.default} onChange={e=>updateField(idx,"default",e.target.checked)} /> 默认
-                </label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:8}}>
+          {agents.map((a)=>{
+            const [bg,border] = cardC(a.cardColor);
+            return (
+              <div key={a.id}
+                onClick={()=>a.supported && onEditAgent?.(a.id)}
+                style={{background:a.supported?bg:P.white,border:`3px solid ${a.supported?border:"#EAEAF5"}`,
+                  borderRadius:20,padding:"14px 12px",textAlign:"center",cursor:a.supported?"pointer":"not-allowed",
+                  opacity:a.supported?1:0.65,boxShadow:a.supported?`0 6px 18px ${border}44`:"0 2px 8px #0000000A",
+                  transition:"all 0.18s ease"}}>
+                <div style={{fontSize:30,marginBottom:6}}>{a.emoji}</div>
+                <div style={{fontFamily:"Fredoka One,cursive",fontSize:15,color:P.ink,marginBottom:4}}>{a.label}</div>
+                <div style={{fontSize:11,color:P.soft,lineHeight:1.4}}>{a.supported?a.desc:"该 Agent 暂不支持可视化编辑"}</div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:status==="error"?P.coral:P.teal}}>{message}</div>}
-      <div style={{marginTop:8,fontSize:11,color:P.soft}}>在这里可以直接改现有 Agent 的 id/workspace/agentDir，改完点“保存改动”。</div>
+      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:P.coral}}>{message}</div>}
     </div>
   );
 }
@@ -1106,6 +1077,9 @@ export default function App(){
   const [privacy, setPrivacy] = useState("per-channel-peer");
   const [wsState, setWsState] = useState("disconnected");
   const [token, setToken] = useState(() => localStorage.getItem("openclaw_token") ?? "");
+  const [editMode, setEditMode] = useState(false);
+  const [baseAgentList, setBaseAgentList] = useState([]);
+  const [baseBindings, setBaseBindings] = useState([]);
 
   const connectGateway = useCallback((nextToken) => {
     const client = getGatewayClient();
@@ -1131,6 +1105,35 @@ export default function App(){
     }
     return unsub;
   },[connectGateway]);
+
+  const startEditExistingAgent = useCallback(async (agentId) => {
+    const tmpl = AGENT_TEMPLATES.find(t => t.agentId === agentId);
+    if (!tmpl) return;
+
+    const client = getGatewayClient();
+    const snapshot = await client.configGet();
+
+    setEditMode(true);
+    setPicked([tmpl.label]);
+    setSouls({ [tmpl.label]: souls[tmpl.label] ?? "" });
+    setPrivacy(snapshot.config?.session?.dmScope ?? "per-channel-peer");
+
+    const list = snapshot.config?.agents?.list ?? [];
+    const bindings = snapshot.config?.bindings ?? [];
+    setBaseAgentList(list);
+    setBaseBindings(bindings);
+
+    const existingRules = bindings
+      .filter(b => b.agentId === agentId)
+      .map(b => ({
+        agentLabel: tmpl.label,
+        channelId: b?.match?.channel || "any",
+        agent: tmpl,
+      }));
+
+    setRules(existingRules);
+    setStep(2);
+  }, [souls]);
 
   return(
     <>
@@ -1173,13 +1176,16 @@ export default function App(){
             onReconnect={reconnect}
           />
 
-          <ExistingAgentsPanel wsState={wsState} />
+          <ExistingAgentsPanel
+            wsState={wsState}
+            onEditAgent={(agentId)=>{ startEditExistingAgent(agentId).catch(()=>{}); }}
+          />
 
           <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
             boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
             {step===1&&<Step1 picked={picked}
-              onToggle={l=>setPicked(p=>p.includes(l)?p.filter(x=>x!==l):[...p,l])}
-              onNext={()=>setStep(2)}/>}
+              onToggle={l=>{setEditMode(false);setPicked(p=>p.includes(l)?p.filter(x=>x!==l):[...p,l]);}}
+              onNext={()=>{setEditMode(false);setStep(2);}}/>}
             {step===2&&<Step2 picked={picked} souls={souls}
               onSoulChange={(l,v)=>setSouls(s=>({...s,[l]:v}))}
               onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>}
@@ -1190,7 +1196,14 @@ export default function App(){
             {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
               onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
             {step===5&&<Step5 picked={picked} souls={souls} rules={rules}
-              privacy={privacy} onEdit={()=>setStep(1)} wsConnected={wsState==="connected"} wsState={wsState}/>}
+              privacy={privacy}
+              onEdit={()=>setStep(1)}
+              wsConnected={wsState==="connected"}
+              wsState={wsState}
+              editMode={editMode}
+              baseAgentList={baseAgentList}
+              baseBindings={baseBindings}
+            />}
           </div>
         </div>
       </div>
