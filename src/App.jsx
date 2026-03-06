@@ -1320,34 +1320,54 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
                   opacity:a.supported?1:0.65,boxShadow:a.supported?`0 6px 18px ${border}44`:"0 2px 8px #0000000A",
                   transition:"all 0.18s ease",position:"relative"}}>
                 {a.id !== "main" && (
-                  <button
-                    onMouseEnter={(e)=>{e.stopPropagation(); setHoverDeleteId(a.id);}}
-                    onMouseLeave={(e)=>{e.stopPropagation(); setHoverDeleteId("");}}
-                    onClick={(e)=>{e.stopPropagation(); if(!deletingId) handleDeleteAgent(a.id);}}
-                    title={`删除 ${a.id}`}
-                    style={{
-                      position:"absolute",
-                      top:-10,
-                      right:-10,
-                      width:30,
-                      height:30,
-                      borderRadius:"50%",
-                      border:"3px solid #fff",
-                      background:deleting?"#FFB4A6":(hoverDeleteId===a.id?"#FF5D40":P.coral),
-                      color:"#fff",
-                      fontSize:14,
-                      fontWeight:900,
-                      cursor:deletingId?"wait":"pointer",
-                      lineHeight:1,
-                      boxShadow:hoverDeleteId===a.id?"0 8px 20px #FF6B4A66":"0 4px 10px #FF6B4A44",
-                      transform:hoverDeleteId===a.id?"scale(1.08)":"scale(1)",
-                      transition:"all 0.18s ease",
-                      display:"flex",
-                      alignItems:"center",
-                      justifyContent:"center",
-                    }}>
-                    {deleting?"…":"✕"}
-                  </button>
+                  <>
+                    <button
+                      onMouseEnter={(e)=>{e.stopPropagation(); setHoverDeleteId(a.id);}}
+                      onMouseLeave={(e)=>{e.stopPropagation(); setHoverDeleteId("");}}
+                      onClick={(e)=>{e.stopPropagation(); if(!deletingId) handleDeleteAgent(a.id);}}
+                      style={{
+                        position:"absolute",
+                        top:-10,
+                        right:-10,
+                        width:30,
+                        height:30,
+                        borderRadius:"50%",
+                        border:"3px solid #fff",
+                        background:deleting?"#FFB4A6":(hoverDeleteId===a.id?"#FF5D40":P.coral),
+                        color:"#fff",
+                        fontSize:14,
+                        fontWeight:900,
+                        cursor:deletingId?"wait":"pointer",
+                        lineHeight:1,
+                        boxShadow:hoverDeleteId===a.id?"0 8px 20px #FF6B4A66":"0 4px 10px #FF6B4A44",
+                        transform:hoverDeleteId===a.id?"scale(1.08)":"scale(1)",
+                        transition:"all 0.18s ease",
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"center",
+                      }}>
+                      {deleting?"…":"✕"}
+                    </button>
+                    {hoverDeleteId===a.id && (
+                      <div style={{
+                        position:"absolute",
+                        top:-44,
+                        right:6,
+                        background:"#FFF0EE",
+                        border:"2px solid #FFB8A8",
+                        color:"#8B2020",
+                        borderRadius:12,
+                        padding:"6px 10px",
+                        fontSize:11,
+                        fontWeight:800,
+                        boxShadow:"0 6px 16px #FF6B4A33",
+                        whiteSpace:"nowrap",
+                        pointerEvents:"none",
+                      }}>
+                        删除 {a.id}
+                      </div>
+                    )}
+                  </>
                 )}
                 <div style={{fontSize:30,marginBottom:6}}>{a.emoji}</div>
                 <div style={{fontFamily:"Fredoka One,cursive",fontSize:15,color:P.ink,marginBottom:4}}>{a.label}</div>
