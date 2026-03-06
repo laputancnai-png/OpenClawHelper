@@ -1272,57 +1272,10 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
     setMessage("正在删除，请稍候（Gateway 会短暂重启）…");
 
     try {
-      const client = getGatewayClient();
-      const snapshot = await client.configGet();
-
-      const newAgentList = (snapshot.config?.agents?.list ?? []).filter(a => a.id !== agentId);
-      const newBindings = (snapshot.config?.bindings ?? []).filter(b => b.agentId !== agentId);
-
-      await client.configPatch({
-        raw: JSON.stringify({ agents: { list: newAgentList }, bindings: newBindings }, null, 2),
-        baseHash: snapshot.hash,
-        note: `OpenClawHelper: delete agent ${agentId}`,
-        restartDelayMs: 2000,
-      });
-
-      // Gateway may restart after config.patch; wait then continue best-effort cleanup.
-      await new Promise(r => setTimeout(r, 2600));
-
-      const warnings = [];
-
-      try {
-        const listed = await client.sessionsList(500);
-        const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
-        const targetKeys = keys.filter(k => k.startsWith(`agent:${agentId}:`) || k === `agent:${agentId}`);
-        for (const key of targetKeys) {
-          try { await client.sessionsDelete(key); } catch { /* best effort */ }
-        }
-      } catch (e) {
-        warnings.push(`会话清理跳过：${e?.message ?? String(e)}`);
-      }
-
-      try {
-        const cron = await client.cronList();
-        const jobs = cron.jobs || [];
-        const targetCronIds = jobs.filter(j => j.agentId === agentId).map(j => j.id).filter(Boolean);
-        for (const id of targetCronIds) {
-          try { await client.cronRemove(id); } catch { /* best effort */ }
-        }
-      } catch (e) {
-        warnings.push(`cron 清理跳过：${e?.message ?? String(e)}`);
-      }
-
-      try {
-        await deleteAgentFiles(agentId);
-      } catch (e) {
-        warnings.push(`目录清理失败：${e?.message ?? String(e)}`);
-      }
-
-      setMessage(
-        warnings.length === 0
-          ? `已删除 Agent ${agentId}（配置、会话、cron、目录已清理）。`
-          : `已删除 Agent ${agentId}，但有告警：${warnings.join("；")}`
-      );
+      await deleteAgentFiles(agentId);
+      setMessage(`已删除 Agent ${agentId}（维护模式：已停 Gateway→删除→重启）。`);
+      // give gateway a moment to settle
+      await new Promise(r => setTimeout(r, 1200));
       await loadAgents();
     } catch (e) {
       setMessage(`删除失败：${e?.message ?? String(e)}`);
