@@ -1202,6 +1202,124 @@ function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}
   );
 }
 
+function AgentCollaborationPanel({wsState}){
+  const wsConnected = wsState === "connected";
+  const [status, setStatus] = useState("idle");
+  const [message, setMessage] = useState("");
+  const [agentIds, setAgentIds] = useState([]);
+  const [enabled, setEnabled] = useState(false);
+  const [allow, setAllow] = useState([]);
+
+  const loadConfig = useCallback(async () => {
+    if (!wsConnected) {
+      setStatus("error");
+      setMessage("Gateway 未连接，无法读取协作配置。");
+      return;
+    }
+    setStatus("loading");
+    setMessage("");
+    try {
+      const client = getGatewayClient();
+      const snap = await client.configGet();
+      const list = (snap.config?.agents?.list ?? []).map(a => a.id).filter(Boolean);
+      const a2a = snap.config?.tools?.agentToAgent ?? {};
+      setAgentIds(list);
+      setEnabled(!!a2a.enabled);
+      setAllow(Array.isArray(a2a.allow) ? a2a.allow : []);
+      setStatus("idle");
+    } catch (e) {
+      setStatus("error");
+      setMessage(`读取失败：${e?.message ?? String(e)}`);
+    }
+  }, [wsConnected]);
+
+  useEffect(()=>{
+    if (wsConnected) loadConfig();
+  },[wsConnected, loadConfig]);
+
+  const toggleAllow = (id) => {
+    setAllow(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  };
+
+  const applySupervisorPreset = () => {
+    const ids = Array.from(new Set(["main", ...agentIds.filter(id => id !== "main")]));
+    setEnabled(true);
+    setAllow(ids);
+    setMessage("已应用 Supervisor 推荐预设（main 调度 + 专家白名单）。");
+  };
+
+  const saveConfig = useCallback(async () => {
+    if (!wsConnected) {
+      setStatus("error");
+      setMessage("Gateway 未连接，无法保存。请先连接。");
+      return;
+    }
+    setStatus("saving");
+    setMessage("");
+    try {
+      const client = getGatewayClient();
+      const snap = await client.configGet();
+      await client.configPatch({
+        raw: JSON.stringify({
+          tools: {
+            agentToAgent: {
+              enabled,
+              allow: Array.from(new Set(allow)),
+            },
+          },
+        }, null, 2),
+        baseHash: snap.hash,
+        note: "OpenClawHelper: configure agent-to-agent communication",
+        restartDelayMs: 1500,
+      });
+      setStatus("success");
+      setMessage("Agent 间通信配置已保存（Gateway 将自动重启）。");
+    } catch (e) {
+      setStatus("error");
+      setMessage(`保存失败：${e?.message ?? String(e)}`);
+    }
+  }, [wsConnected, enabled, allow]);
+
+  return (
+    <div style={{background:P.white,borderRadius:18,padding:"16px 18px",marginBottom:14,
+      boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div>
+          <div style={{fontFamily:"Fredoka One,cursive",fontSize:18,color:P.ink}}>🔁 Agent 间通信（Phase 1）</div>
+          <div style={{fontSize:12,color:P.soft}}>配置 tools.agentToAgent 的开关与 allow 白名单</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn small ghost onClick={loadConfig}>刷新配置</Btn>
+          <Btn small color={P.indigo} onClick={applySupervisorPreset}>Supervisor 预设</Btn>
+          <Btn small color={P.teal} onClick={saveConfig} disabled={status==="saving"||!wsConnected}>{status==="saving"?"保存中…":"保存"}</Btn>
+        </div>
+      </div>
+
+      <label style={{display:"inline-flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:P.ink,marginBottom:10}}>
+        <input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} />
+        启用 Agent 间通信（agentToAgent.enabled）
+      </label>
+
+      <div style={{fontSize:11,color:P.soft,marginBottom:10}}>⚠️ 开启后会增加 token 消耗与协作复杂度，推荐只给必要 Agent 开权限。</div>
+
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {agentIds.map(id => {
+          const on = allow.includes(id);
+          return (
+            <button key={id} onClick={()=>toggleAllow(id)}
+              style={{border:"2px solid #E8E8F5",background:on?"#EAF7F2":"#FAFAFE",color:on?P.teal:P.ink,
+                borderRadius:999,padding:"6px 12px",fontSize:12,fontWeight:800,cursor:"pointer"}}>
+              {on?"✅":"⬜"} {id}
+            </button>
+          );
+        })}
+      </div>
+
+      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:status==="error"?P.coral:P.teal}}>{message}</div>}
+    </div>
+  );
+}
+
 function ExistingAgentsPanel({wsState, onEditAgent}){
   const wsConnected = wsState === "connected";
   const { deleteAgentFiles } = useFileServer();
@@ -1517,6 +1635,8 @@ export default function App(){
             wsState={wsState}
             onEditAgent={(agentId)=>{ startEditExistingAgent(agentId).catch(()=>{}); }}
           />
+
+          <AgentCollaborationPanel wsState={wsState} />
 
           <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
             boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
