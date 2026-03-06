@@ -1279,8 +1279,7 @@ function AgentCollaborationPanel({wsState}){
   };
 
   const addRule = () => {
-    const fallback = agentIds.find(id=>id!=="main") || "main";
-    setHandoffRules(prev => [...prev, { task: "新任务类型", to: fallback }]);
+    setHandoffRules(prev => [...prev, { task: "新任务类型", to: "__unassigned__" }]);
   };
 
   const moveRuleTo = (idx, to) => {
@@ -1328,7 +1327,7 @@ function AgentCollaborationPanel({wsState}){
             agentToAgent: {
               enabled,
               allow: Array.from(new Set(allow)),
-              routingHints: handoffRules.map(r => ({ task: r.task, to: r.to })),
+              routingHints: handoffRules.filter(r=>r.to && r.to !== "__unassigned__").map(r => ({ task: r.task, to: r.to })),
             },
           },
         }, null, 2),
@@ -1402,7 +1401,8 @@ function AgentCollaborationPanel({wsState}){
                   <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
                     placeholder="例如：写作任务 / 代码任务 / 资料收集"
                     style={{flex:1,padding:"6px 8px",borderRadius:8,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                  <span style={{fontSize:11,color:P.soft,whiteSpace:"nowrap"}}>→ {r.to}</span>
+                  <span style={{fontSize:11,color:P.soft,whiteSpace:"nowrap"}}>→ {r.to==="__unassigned__"?"未分配":r.to}</span>
+                  <button onClick={()=>moveRuleTo(idx,"__unassigned__")} style={{border:"none",background:"#FFF6E8",color:P.amber,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>移出</button>
                   <button onClick={()=>removeRule(idx)} style={{border:"none",background:"#FFEAE6",color:P.coral,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>删</button>
                 </div>
               ))}
@@ -1412,6 +1412,21 @@ function AgentCollaborationPanel({wsState}){
           <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
             <div style={{fontSize:11,fontWeight:800,color:P.soft,marginBottom:8}}>把任务拖到助手上</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div
+                onDragOver={(e)=>{e.preventDefault();setHoverLane("__unassigned__");}}
+                onDragLeave={()=>setHoverLane("")}
+                onDrop={()=>{if(dragRuleIdx!==null) moveRuleTo(dragRuleIdx,"__unassigned__"); setDragRuleIdx(null); setHoverLane("");}}
+                style={{border:`2px dashed ${hoverLane==="__unassigned__"?P.amber:"#E8E1CC"}`,
+                  background:hoverLane==="__unassigned__"?"#FFF8E8":"#FFFCF4",borderRadius:10,padding:"8px 10px"}}>
+                <div style={{fontSize:12,fontWeight:800,color:P.ink,marginBottom:4}}>未分配</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").map((r,i)=>(
+                    <span key={`unassigned-${i}`} style={{fontSize:11,background:"#FFF6E8",color:"#9A6B00",border:"1px solid #F4D39A",borderRadius:999,padding:"3px 8px"}}>{r.task}</span>
+                  ))}
+                  {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").length===0 && <span style={{fontSize:11,color:P.soft}}>把任务拖回这里可取消分配</span>}
+                </div>
+              </div>
+
               {agentIds.map((id)=>(
                 <div key={id}
                   onDragOver={(e)=>{e.preventDefault();setHoverLane(id);}}
