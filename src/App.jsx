@@ -528,7 +528,7 @@ function Step4({privacy,setPrivacy,onNext,onBack}){
 }
 
 // ── Step 5: Launch — REAL Gateway + FileServer ─────────────────────────────────
-function Step5({picked,souls,rules,privacy,onEdit}){
+function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const privOpt=PRIVACY_OPTIONS.find(p=>p.id===privacy);
   const { writeSoul, status: fsStatus } = useFileServer();
@@ -547,6 +547,17 @@ function Step5({picked,souls,rules,privacy,onEdit}){
   }));
 
   const handleLaunch = useCallback(async () => {
+    if (!wsConnected) {
+      setLaunchStatus("error");
+      setLaunchLog([]);
+      setErrorMsg(
+        wsState === "reconnecting"
+          ? "Gateway 正在重连中，请稍等几秒后重试。"
+          : "Gateway 未连接。请先在顶部填写/保存 Token 并连接成功后再启动。"
+      );
+      return;
+    }
+
     setLaunchStatus("running");
     setLaunchLog([]);
     setErrorMsg("");
@@ -646,7 +657,7 @@ function Step5({picked,souls,rules,privacy,onEdit}){
       log(true, "Gateway 重启中，稍后刷新页面可确认状态");
       setLaunchStatus("success");
     }
-  }, [agents, souls, rules, privacy, writeSoul]);
+  }, [agents, souls, rules, privacy, writeSoul, wsConnected, wsState]);
 
   // ── Render: idle (summary) ─────────────────────────────────────────────────
   if (launchStatus === "idle") return (
@@ -721,9 +732,19 @@ function Step5({picked,souls,rules,privacy,onEdit}){
         </div>
       )}
 
+      {!wsConnected && (
+        <div style={{background:"#FFF0EE",border:"2px solid #FFB8A8",borderRadius:14,
+          padding:"12px 18px",marginBottom:16,fontSize:13,color:"#8B2020",fontWeight:600,
+          display:"flex",alignItems:"center",gap:8}}>
+          {wsState === "reconnecting"
+            ? "⏳ Gateway 重连中，请稍候再点击启动。"
+            : "🔌 Gateway 未连接，请先保存 Token 并连接成功。"}
+        </div>
+      )}
+
       <div style={{display:"flex",gap:12,justifyContent:"center"}}>
         <Btn ghost onClick={onEdit} small>✏️ 重新编辑</Btn>
-        <Btn color={P.teal} onClick={handleLaunch}>🚀 启动助手系统</Btn>
+        <Btn color={P.teal} onClick={handleLaunch} disabled={!wsConnected}>🚀 启动助手系统</Btn>
       </div>
     </div>
   );
@@ -812,6 +833,7 @@ function Step5({picked,souls,rules,privacy,onEdit}){
 
 // ── Connection status banner ───────────────────────────────────────────────────
 function ConnectionBanner(){
+
   const [wsState, setWsState]   = useState("disconnected");
   const [fsStatus, setFsStatus] = useState("unknown");
   const { status } = useFileServer();
@@ -852,6 +874,35 @@ function ConnectionBanner(){
   );
 }
 
+function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}){
+  const wsOk = wsState === "connected";
+  return(
+    <div style={{background:P.white,borderRadius:18,padding:"14px 16px",marginBottom:14,
+      boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <div style={{fontSize:12,fontWeight:800,color:P.soft,letterSpacing:1}}>🔐 Gateway 连接设置</div>
+        <div style={{fontSize:12,fontWeight:700,color:wsOk?P.teal:(wsState==="reconnecting"?P.amber:P.coral)}}>
+          {wsOk?"已连接":wsState==="reconnecting"?"重连中…":"未连接"}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}>
+        <input
+          value={token}
+          onChange={e=>setToken(e.target.value)}
+          placeholder="粘贴 OpenClaw Gateway Token"
+          style={{flex:1,minWidth:280,padding:"10px 12px",borderRadius:12,border:"2px solid #E8E8F5",
+            fontSize:13,fontFamily:"Nunito,sans-serif",background:"#FAFAFE",color:P.ink}}
+        />
+        <Btn small color={P.indigo} onClick={onSaveToken}>💾 保存 Token</Btn>
+        <Btn small color={P.teal} onClick={onReconnect}>🔄 重新连接</Btn>
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:P.soft}}>
+        Token 保存在浏览器 localStorage，仅本机使用。
+      </div>
+    </div>
+  );
+}
+
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function App(){
   const [step,    setStep]    = useState(1);
@@ -859,18 +910,33 @@ export default function App(){
   const [souls,   setSouls]   = useState({});
   const [rules,   setRules]   = useState([]);
   const [privacy, setPrivacy] = useState("per-channel-peer");
+  const [wsState, setWsState] = useState("disconnected");
+  const [token, setToken] = useState(() => localStorage.getItem("openclaw_token") ?? "");
+
+  const connectGateway = useCallback((nextToken) => {
+    const client = getGatewayClient();
+    client.connect("ws://127.0.0.1:18789", nextToken || undefined).catch(()=>{});
+  }, []);
+
+  const saveToken = useCallback(() => {
+    localStorage.setItem("openclaw_token", token.trim());
+    connectGateway(token.trim());
+  }, [token, connectGateway]);
+
+  const reconnect = useCallback(() => {
+    connectGateway((localStorage.getItem("openclaw_token") ?? token).trim());
+  }, [connectGateway, token]);
 
   // Auto-connect to Gateway on mount
   useEffect(()=>{
     const client = getGatewayClient();
+    setWsState(client.state);
+    const unsub = client.onStateChange(setWsState);
     if(client.state === "disconnected"){
-      // Token read from localStorage (set once by user in settings — future feature)
-      const token = localStorage.getItem("openclaw_token") ?? undefined;
-      client.connect("ws://127.0.0.1:18789", token).catch(()=>{
-        // Connection errors are shown in ConnectionBanner — no need to throw here
-      });
+      connectGateway((localStorage.getItem("openclaw_token") ?? "").trim());
     }
-  },[]);
+    return unsub;
+  },[connectGateway]);
 
   return(
     <>
@@ -900,10 +966,19 @@ export default function App(){
 
         {/* Main */}
         <div style={{maxWidth:700,margin:"36px auto 0",padding:"0 20px"}}>
-          <div style={{background:P.white,borderRadius:22,padding:"20px 28px",marginBottom:24,
+          <div style={{background:P.white,borderRadius:22,padding:"20px 28px",marginBottom:14,
             boxShadow:"0 4px 18px #00000010",border:"2px solid #EBEBF8"}}>
             <StepBar current={step}/>
           </div>
+
+          <ConnectionSettings
+            wsState={wsState}
+            token={token}
+            setToken={setToken}
+            onSaveToken={saveToken}
+            onReconnect={reconnect}
+          />
+
           <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
             boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
             {step===1&&<Step1 picked={picked}
@@ -919,7 +994,7 @@ export default function App(){
             {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
               onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
             {step===5&&<Step5 picked={picked} souls={souls} rules={rules}
-              privacy={privacy} onEdit={()=>setStep(1)}/>}
+              privacy={privacy} onEdit={()=>setStep(1)} wsConnected={wsState==="connected"} wsState={wsState}/>}
           </div>
         </div>
       </div>
