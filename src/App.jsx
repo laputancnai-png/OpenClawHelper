@@ -1245,7 +1245,7 @@ function AgentCollaborationPanel({wsState}){
     const ids = Array.from(new Set(["main", ...agentIds.filter(id => id !== "main")]));
     setEnabled(true);
     setAllow(ids);
-    setMessage("已应用 Supervisor 推荐预设（main 调度 + 专家白名单）。");
+    setMessage("已应用推荐预设：让总管助手可以呼叫其他助手协作。");
   };
 
   const saveConfig = useCallback(async () => {
@@ -1285,22 +1285,22 @@ function AgentCollaborationPanel({wsState}){
       boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
         <div>
-          <div style={{fontFamily:"Fredoka One,cursive",fontSize:18,color:P.ink}}>🔁 Agent 间通信（Phase 1）</div>
-          <div style={{fontSize:12,color:P.soft}}>配置 tools.agentToAgent 的开关与 allow 白名单</div>
+          <div style={{fontFamily:"Fredoka One,cursive",fontSize:18,color:P.ink}}>🔁 助手协作（第一版）</div>
+          <div style={{fontSize:12,color:P.soft}}>让不同助手之间可以互相配合完成任务</div>
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn small ghost onClick={loadConfig}>刷新配置</Btn>
-          <Btn small color={P.indigo} onClick={applySupervisorPreset}>Supervisor 预设</Btn>
+          <Btn small color={P.indigo} onClick={applySupervisorPreset}>一键推荐配置</Btn>
           <Btn small color={P.teal} onClick={saveConfig} disabled={status==="saving"||!wsConnected}>{status==="saving"?"保存中…":"保存"}</Btn>
         </div>
       </div>
 
       <label style={{display:"inline-flex",alignItems:"center",gap:8,fontSize:13,fontWeight:700,color:P.ink,marginBottom:10}}>
         <input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} />
-        启用 Agent 间通信（agentToAgent.enabled）
+        允许助手之间互相协作
       </label>
 
-      <div style={{fontSize:11,color:P.soft,marginBottom:10}}>⚠️ 开启后会增加 token 消耗与协作复杂度，推荐只给必要 Agent 开权限。</div>
+      <div style={{fontSize:11,color:P.soft,marginBottom:10}}>⚠️ 开启后会增加用量与流程复杂度，建议只勾选确实需要互相协作的助手。</div>
 
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         {agentIds.map(id => {
