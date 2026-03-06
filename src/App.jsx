@@ -1250,7 +1250,7 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
     if (!ok) return;
 
     setDeletingId(agentId);
-    setMessage("");
+    setMessage("正在删除，请稍候（Gateway 会短暂重启）…");
 
     try {
       const client = getGatewayClient();
@@ -1266,11 +1266,20 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
         restartDelayMs: 2000,
       });
 
-      const listed = await client.sessionsList(500);
-      const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
-      const targetKeys = keys.filter(k => k.startsWith(`agent:${agentId}:`) || k === `agent:${agentId}`);
-      for (const key of targetKeys) {
-        try { await client.sessionsDelete(key); } catch { /* best effort */ }
+      // Gateway may restart after config.patch; wait then continue best-effort cleanup.
+      await new Promise(r => setTimeout(r, 2600));
+
+      const warnings = [];
+
+      try {
+        const listed = await client.sessionsList(500);
+        const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
+        const targetKeys = keys.filter(k => k.startsWith(`agent:${agentId}:`) || k === `agent:${agentId}`);
+        for (const key of targetKeys) {
+          try { await client.sessionsDelete(key); } catch { /* best effort */ }
+        }
+      } catch (e) {
+        warnings.push(`会话清理跳过：${e?.message ?? String(e)}`);
       }
 
       try {
@@ -1280,10 +1289,21 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
         for (const id of targetCronIds) {
           try { await client.cronRemove(id); } catch { /* best effort */ }
         }
-      } catch { /* cron cleanup best effort */ }
+      } catch (e) {
+        warnings.push(`cron 清理跳过：${e?.message ?? String(e)}`);
+      }
 
-      await deleteAgentFiles(agentId);
-      setMessage(`已删除 Agent ${agentId}（配置、会话、cron、目录已清理）。`);
+      try {
+        await deleteAgentFiles(agentId);
+      } catch (e) {
+        warnings.push(`目录清理失败：${e?.message ?? String(e)}`);
+      }
+
+      setMessage(
+        warnings.length === 0
+          ? `已删除 Agent ${agentId}（配置、会话、cron、目录已清理）。`
+          : `已删除 Agent ${agentId}，但有告警：${warnings.join("；")}`
+      );
       await loadAgents();
     } catch (e) {
       setMessage(`删除失败：${e?.message ?? String(e)}`);
