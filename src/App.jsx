@@ -1207,8 +1207,13 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
 
   const loadAgents = useCallback(async () => {
     if (!wsConnected) {
-      setStatus("error");
-      setMessage("Gateway 未连接，无法读取现有 Agents。请先连接。");
+      if (wsState === "reconnecting") {
+        setStatus("loading");
+        setMessage("Gateway 重连中，正在自动重试读取 Agents…");
+      } else {
+        setStatus("error");
+        setMessage("Gateway 未连接，无法读取现有 Agents。请先连接。");
+      }
       return;
     }
 
@@ -1230,15 +1235,29 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
         };
       }));
       setStatus("idle");
+      setMessage("");
     } catch (e) {
-      setStatus("error");
-      setMessage(`读取 Agents 失败：${e?.message ?? String(e)}`);
+      const msg = e?.message ?? String(e);
+      if (msg.includes("reconnecting") || msg.includes("NOT_CONNECTED")) {
+        setStatus("loading");
+        setMessage("Gateway 重连中，正在自动重试读取 Agents…");
+      } else {
+        setStatus("error");
+        setMessage(`读取 Agents 失败：${msg}`);
+      }
     }
-  }, [wsConnected]);
+  }, [wsConnected, wsState]);
 
   useEffect(() => {
-    if (wsConnected) loadAgents();
-  }, [wsConnected, loadAgents]);
+    if (wsConnected) {
+      loadAgents();
+      return;
+    }
+    if (wsState === "reconnecting") {
+      const t = setTimeout(() => { loadAgents(); }, 1200);
+      return () => clearTimeout(t);
+    }
+  }, [wsConnected, wsState, loadAgents]);
 
   const handleDeleteAgent = useCallback(async (agentId) => {
     if (!agentId || agentId === "main") {
