@@ -1310,14 +1310,32 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
 
       await deleteAgentFiles(agentId);
 
-      // verify result + main workspace invariant
-      const verify = await client.configGet();
+      // verify result + invariants; self-heal with one more patch if needed
+      let verify = await client.configGet();
+      const curList = verify.config?.agents?.list ?? [];
+      const desiredList = curList
+        .filter(a => a.id !== agentId)
+        .map(a => a.id === "main"
+          ? { ...a, workspace: "/home/yufengw/.openclaw/workspace", agentDir: "/home/yufengw/.openclaw/agents/main/agent" }
+          : a
+        );
+
+      const listChanged = JSON.stringify(curList) !== JSON.stringify(desiredList);
+      if (listChanged) {
+        await client.configPatch({
+          raw: JSON.stringify({ agents: { list: desiredList } }, null, 2),
+          baseHash: verify.hash,
+          note: `OpenClawHelper: post-delete normalize ${agentId}`,
+          restartDelayMs: 1500,
+        });
+        await new Promise(r => setTimeout(r, 2200));
+        verify = await client.configGet();
+      }
+
       const stillExists = (verify.config?.agents?.list ?? []).some(a => a.id === agentId);
       const main = (verify.config?.agents?.list ?? []).find(a => a.id === "main");
       const mainWorkspace = main?.workspace || verify.config?.agents?.defaults?.workspace || "";
-      if (stillExists) {
-        throw new Error(`删除未完成：${agentId} 仍在 agents.list 中`);
-      }
+      if (stillExists) throw new Error(`删除未完成：${agentId} 仍在 agents.list 中`);
       if (String(mainWorkspace).trim() !== "/home/yufengw/.openclaw/workspace") {
         throw new Error(`main workspace 异常：${mainWorkspace}`);
       }
