@@ -1379,52 +1379,56 @@ function AgentCollaborationPanel({wsState}){
         })}
       </div>
 
-      <div style={{marginTop:14,background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:14,padding:"12px 12px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:800,color:P.soft}}>🧭 任务分配规则（拖拽版）</div>
-          <Btn small ghost onClick={addRule}>+ 添加规则</Btn>
+      <div style={{marginTop:14,background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:16,padding:"14px 14px"}}>
+        <div style={{textAlign:"center",marginBottom:14}}>
+          <div style={{fontSize:30,marginBottom:4}}>🧭</div>
+          <div style={{fontFamily:"Fredoka One,cursive",fontSize:20,color:P.ink,marginBottom:4}}>把任务拖到对应的助手上</div>
+          <div style={{fontSize:13,color:P.soft}}>和渠道拖拽同样交互：左侧拖动任务，右侧放到目标助手</div>
         </div>
-        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点"添加规则"，再拖到目标助手上。</div>}
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
-            <div style={{fontSize:11,fontWeight:800,color:P.soft,marginBottom:8}}>待分配任务（可拖拽）</div>
+        <div style={{display:"flex",gap:16,marginBottom:12}}>
+          <div style={{flex:"0 0 260px"}}>
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:1,color:P.soft,marginBottom:10,textTransform:"uppercase"}}>📦 拖动任务卡</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {handoffRules.map((r, idx)=>(
                 <div key={idx}
                   draggable
                   onDragStart={()=>setDragRuleIdx(idx)}
                   onDragEnd={()=>{setDragRuleIdx(null);setHoverLane("");}}
-                  style={{background:dragRuleIdx===idx?"#EEF4FF":"#FAFAFE",border:`2px solid ${dragRuleIdx===idx?P.indigo:"#E8E8F5"}`,
-                    borderRadius:10,padding:"8px 10px",display:"flex",alignItems:"center",gap:8,cursor:"grab"}}>
-                  <span style={{fontSize:14,color:P.soft}}>⠿</span>
+                  style={{background:dragRuleIdx===idx?"#EEF0FF":P.white,border:`3px solid ${dragRuleIdx===idx?P.indigo:"#E8E8F5"}`,
+                    borderRadius:16,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"grab",
+                    transform:dragRuleIdx===idx?"scale(1.03) rotate(-1deg)":"scale(1)",transition:"all 0.15s",
+                    boxShadow:dragRuleIdx===idx?`0 8px 24px ${P.indigo}55`:"0 2px 6px #0000000A"}}>
+                  <span style={{fontSize:16,color:P.soft}}>⠿</span>
                   <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
                     placeholder="例如：写作任务 / 代码任务 / 资料收集"
                     style={{flex:1,padding:"6px 8px",borderRadius:8,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                  <span style={{fontSize:11,color:P.soft,whiteSpace:"nowrap"}}>→ {r.to==="__unassigned__"?"未分配":r.to}</span>
-                  <button onClick={()=>moveRuleTo(idx,"__unassigned__")} style={{border:"none",background:"#FFF6E8",color:P.amber,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>移出</button>
-                  <button onClick={()=>removeRule(idx)} style={{border:"none",background:"#FFEAE6",color:P.coral,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>删</button>
+                  <button onClick={()=>moveRuleTo(idx,"__unassigned__")}
+                    style={{border:"none",background:"#FFF6E8",color:P.amber,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>移出</button>
+                  <button onClick={()=>removeRule(idx)}
+                    style={{border:"none",background:"#FFEAE6",color:P.coral,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>删</button>
                 </div>
               ))}
+              <Btn small ghost onClick={addRule}>+ 添加任务卡</Btn>
             </div>
           </div>
 
-          <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
-            <div style={{fontSize:11,fontWeight:800,color:P.soft,marginBottom:8}}>把任务拖到助手上</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:1,color:P.soft,marginBottom:10,textTransform:"uppercase"}}>🎯 放到助手上</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <div
                 onDragOver={(e)=>{e.preventDefault();setHoverLane("__unassigned__");}}
                 onDragLeave={()=>setHoverLane("")}
                 onDrop={()=>{if(dragRuleIdx!==null) moveRuleTo(dragRuleIdx,"__unassigned__"); setDragRuleIdx(null); setHoverLane("");}}
-                style={{border:`2px dashed ${hoverLane==="__unassigned__"?P.amber:"#E8E1CC"}`,
-                  background:hoverLane==="__unassigned__"?"#FFF8E8":"#FFFCF4",borderRadius:10,padding:"8px 10px"}}>
-                <div style={{fontSize:12,fontWeight:800,color:P.ink,marginBottom:4}}>未分配</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").map((r,i)=>(
-                    <span key={`unassigned-${i}`} style={{fontSize:11,background:"#FFF6E8",color:"#9A6B00",border:"1px solid #F4D39A",borderRadius:999,padding:"3px 8px"}}>{r.task}</span>
-                  ))}
-                  {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").length===0 && <span style={{fontSize:11,color:P.soft}}>把任务拖回这里可取消分配</span>}
-                </div>
+                style={{minHeight:56,background:hoverLane==="__unassigned__"?"#FFF8E8":"#FFFCF4",
+                  border:`3px dashed ${hoverLane==="__unassigned__"?P.amber:"#E8E1CC"}`,borderRadius:16,padding:"10px 14px",
+                  display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",transition:"all 0.15s"}}>
+                <span style={{fontSize:20}}>📥</span>
+                <span style={{fontFamily:"Fredoka One,cursive",fontSize:14,color:P.ink,minWidth:68}}>未分配</span>
+                {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").length===0 && <span style={{fontSize:12,color:P.soft,fontStyle:"italic"}}>拖任务到这里可取消分配…</span>}
+                {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").map((r,i)=>(
+                  <Pill key={`u-${i}`} bg="#FFF6E8" border="#F4D39A">📝 {r.task}</Pill>
+                ))}
               </div>
 
               {agentIds.map((id)=>(
@@ -1432,15 +1436,15 @@ function AgentCollaborationPanel({wsState}){
                   onDragOver={(e)=>{e.preventDefault();setHoverLane(id);}}
                   onDragLeave={()=>setHoverLane("")}
                   onDrop={()=>{if(dragRuleIdx!==null) moveRuleTo(dragRuleIdx,id); setDragRuleIdx(null); setHoverLane("");}}
-                  style={{border:`2px dashed ${hoverLane===id?P.indigo:"#DCDCEC"}`,
-                    background:hoverLane===id?"#EEF4FF":"#FCFCFF",borderRadius:10,padding:"8px 10px"}}>
-                  <div style={{fontSize:12,fontWeight:800,color:P.ink,marginBottom:4}}>{id}</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {handoffRules.filter(r=>r.to===id).map((r,i)=>(
-                      <span key={`${id}-${i}`} style={{fontSize:11,background:"#EAF7F2",color:P.teal,border:"1px solid #BFE8D8",borderRadius:999,padding:"3px 8px"}}>{r.task}</span>
-                    ))}
-                    {handoffRules.filter(r=>r.to===id).length===0 && <span style={{fontSize:11,color:P.soft}}>拖任务到这里</span>}
-                  </div>
+                  style={{minHeight:56,background:hoverLane===id?"#EEF0FF":"#FAFAFE",
+                    border:`3px dashed ${hoverLane===id?P.indigo:"#D8D8F0"}`,borderRadius:16,padding:"10px 14px",
+                    display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",transition:"all 0.15s"}}>
+                  <span style={{fontSize:20}}>🤖</span>
+                  <span style={{fontFamily:"Fredoka One,cursive",fontSize:14,color:P.ink,minWidth:68}}>{id}</span>
+                  {handoffRules.filter(r=>r.to===id).length===0 && <span style={{fontSize:12,color:P.soft,fontStyle:"italic"}}>拖任务到这里…</span>}
+                  {handoffRules.filter(r=>r.to===id).map((r,i)=>(
+                    <Pill key={`${id}-${i}`} bg="#EAF7F2" border="#BFE8D8">📝 {r.task}</Pill>
+                  ))}
                 </div>
               ))}
             </div>
@@ -1805,13 +1809,13 @@ export default function App(){
                   onSoulChange={(l,v)=>setSouls(s=>({...s,[l]:v}))}
                   onAgentsDocChange={(l,v)=>setAgentsDocs(s=>({...s,[l]:v}))}
                   onUserDocChange={(l,v)=>setUserDocs(s=>({...s,[l]:v}))}
-                  onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>} 
+                  onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>}
                 {step===3&&<Step3 picked={picked} rules={rules}
                   onAddRule={r=>setRules(p=>[...p,r])}
                   onRemoveRule={(al,ch)=>setRules(p=>p.filter(r=>!(r.agentLabel===al&&r.channelId===ch)))}
-                  onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>} 
+                  onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>}
                 {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
-                  onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>} 
+                  onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
                 {step===5&&<Step5 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs} rules={rules}
                   privacy={privacy}
                   onEdit={()=>setStep(1)}
