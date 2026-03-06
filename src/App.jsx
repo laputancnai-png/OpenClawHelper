@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getGatewayClient } from "./lib/gateway-client";
-import { useFileServer, soulPath } from "./hooks/useFileServer";
+import { useFileServer, soulPath, agentFilePath } from "./hooks/useFileServer";
 
 // ── Re-export everything from the prototype (styles, helpers, steps 1-4) ─────
 // The prototype is the single source of truth for UI. We only replace the
@@ -81,6 +81,36 @@ const AGENT_TEMPLATES = [
     desc:"处理表格、数字，帮你看懂数据",
     soulStarter:`# 数据助手\n\n## 角色\n你是一位专业的数据分析师，擅长把复杂的数字和表格变成人人都能看懂的结论。\n\n## 风格\n- 先说最重要的结论\n- 用简单的数字说明问题\n- 避免让人看不懂的统计学术语` },
 ];
+
+const starterAgentsMd = (label) => `# AGENTS.md - ${label}
+
+## 角色与目标
+- 你是「${label}」助手。
+- 优先完成用户明确请求，避免臆测。
+
+## 工作方式
+- 先给结论，再给关键依据。
+- 需要时给步骤化建议，保持简洁。
+- 不确定时明确说明不确定点。
+
+## 安全边界
+- 不执行高风险或破坏性动作，除非用户明确确认。
+- 涉及外部发送（消息/邮件/发布）前先二次确认。
+`;
+
+const starterUserMd = () => `# USER.md
+
+## 用户偏好（可编辑）
+- 称呼：
+- 语言偏好：中文
+- 输出偏好：先结论后细节
+
+## 长期目标（可编辑）
+- 
+
+## 备注
+- 这个文件由用户长期维护，系统不会自动覆盖。
+`;
 
 const CHANNEL_OPTIONS = [
   {id:"slack",    emoji:"⚡", label:"Slack"},
@@ -531,7 +561,7 @@ function Step4({privacy,setPrivacy,onNext,onBack}){
 function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=false,baseAgentList=[],baseBindings=[]}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const privOpt=PRIVACY_OPTIONS.find(p=>p.id===privacy);
-  const { writeSoul, status: fsStatus } = useFileServer();
+  const { writeSoul, readFile, writeFile, status: fsStatus } = useFileServer();
 
   // "idle" | "running" | "success" | "error"
   const [launchStatus, setLaunchStatus] = useState("idle");
@@ -566,19 +596,38 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
 
     const client = getGatewayClient();
 
-    // ── Step A: write SOUL.md files ──────────────────────────────────────────
+    const ensureAgentDoc = async (agentId, filename, content) => {
+      const relPath = agentFilePath(agentId, filename);
+      try {
+        await readFile(relPath);
+        return false;
+      } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes("404")) throw e;
+        await writeFile(relPath, content);
+        return true;
+      }
+    };
+
+    // ── Step A: write SOUL.md files + scaffold docs ──────────────────────────
     for (const agent of agents) {
       const soul = souls[agent.label]?.trim();
-      if (!soul) {
-        log(true, `${agent.emoji} ${agent.label}：使用默认性格`);
-        continue;
-      }
       try {
-        await writeSoul(agent.agentId, soul);
-        log(true, `${agent.emoji} ${agent.label}：性格说明书已保存 ✓`);
+        if (!soul) {
+          log(true, `${agent.emoji} ${agent.label}：使用默认性格`);
+        } else {
+          await writeSoul(agent.agentId, soul);
+          log(true, `${agent.emoji} ${agent.label}：性格说明书已保存 ✓`);
+        }
+
+        const createdAgents = await ensureAgentDoc(agent.agentId, "AGENTS.md", starterAgentsMd(agent.label));
+        const createdUser = await ensureAgentDoc(agent.agentId, "USER.md", starterUserMd());
+        if (createdAgents || createdUser) {
+          const names = [createdAgents ? "AGENTS.md" : null, createdUser ? "USER.md" : null].filter(Boolean).join(" + ");
+          log(true, `${agent.emoji} ${agent.label}：已初始化 ${names}`);
+        }
       } catch(e) {
-        log(false, `${agent.emoji} ${agent.label}：性格保存失败 — ${e.message}`);
-        setErrorMsg("部分 SOUL.md 写入失败，请检查文件服务器是否在运行（npm run dev）");
+        log(false, `${agent.emoji} ${agent.label}：文件写入失败 — ${e.message}`);
+        setErrorMsg("文件写入失败，请检查文件服务器是否在运行（npm run dev）");
         setLaunchStatus("error");
         return;
       }
@@ -692,7 +741,7 @@ function Step5({picked,souls,rules,privacy,onEdit,wsConnected,wsState,editMode=f
       log(true, "Gateway 重启中，稍后刷新页面可确认状态");
       setLaunchStatus("success");
     }
-  }, [agents, souls, rules, privacy, writeSoul, wsConnected, wsState, editMode, baseAgentList, baseBindings]);
+  }, [agents, souls, rules, privacy, writeSoul, readFile, writeFile, wsConnected, wsState, editMode, baseAgentList, baseBindings]);
 
   const cleanupOldMainSessions = useCallback(async () => {
     setCleanupStatus("running");

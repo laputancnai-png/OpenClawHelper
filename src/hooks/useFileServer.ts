@@ -38,8 +38,12 @@ export type FileContent = {
  * OpenClaw multi-agent layout convention:
  *   ~/.openclaw/workspace-<id>/SOUL.md
  */
+export function agentFilePath(agentId: string, filename: string): string {
+  return `workspace-${agentId}/${filename}`;
+}
+
 export function soulPath(agentId: string): string {
-  return `workspace-${agentId}/SOUL.md`;
+  return agentFilePath(agentId, "SOUL.md");
 }
 
 // ── Core fetch helpers ────────────────────────────────────────────────────────
