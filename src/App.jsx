@@ -1210,6 +1210,8 @@ function AgentCollaborationPanel({wsState}){
   const [enabled, setEnabled] = useState(false);
   const [allow, setAllow] = useState([]);
   const [handoffRules, setHandoffRules] = useState([]);
+  const [dragRuleIdx, setDragRuleIdx] = useState(null);
+  const [hoverLane, setHoverLane] = useState("");
 
   const loadConfig = useCallback(async () => {
     if (!wsConnected) {
@@ -1251,13 +1253,25 @@ function AgentCollaborationPanel({wsState}){
     const ids = Array.from(new Set(["main", ...agentIds.filter(id => id !== "main")]));
     setEnabled(true);
     setAllow(ids);
-    const specialist = agentIds.filter(id => id !== "main");
-    setHandoffRules([
-      { task: "写作任务", to: specialist.includes("writer") ? "writer" : (specialist[0] || "main") },
-      { task: "代码任务", to: specialist.includes("coder") ? "coder" : (specialist[0] || "main") },
-      { task: "资料收集", to: specialist.includes("researcher") ? "researcher" : (specialist[0] || "main") },
-    ]);
-    setMessage("已应用推荐预设：让总管助手可以呼叫其他助手协作。");
+
+    const labelById = Object.fromEntries(AGENT_TEMPLATES.map(t => [t.agentId, t.label]));
+    const taskByLabel = {
+      "写作助手": "写作任务",
+      "代码专家": "代码任务",
+      "资料搜集": "资料收集",
+      "创意顾问": "创意策划",
+      "数据助手": "数据分析",
+    };
+
+    const specialists = ids.filter(id => id !== "main");
+    const dynamicRules = specialists.map((id) => {
+      const label = labelById[id] || id;
+      const task = taskByLabel[label] || `${label}相关任务`;
+      return { task, to: id };
+    });
+
+    setHandoffRules(dynamicRules.length > 0 ? dynamicRules : [{ task: "通用任务", to: "main" }]);
+    setMessage("已按你当前已有助手自动生成推荐协作规则。");
   };
 
   const setRuleField = (idx, field, value) => {
@@ -1267,6 +1281,10 @@ function AgentCollaborationPanel({wsState}){
   const addRule = () => {
     const fallback = agentIds.find(id=>id!=="main") || "main";
     setHandoffRules(prev => [...prev, { task: "新任务类型", to: fallback }]);
+  };
+
+  const moveRuleTo = (idx, to) => {
+    setHandoffRules(prev => prev.map((r,i)=>i===idx?{...r,to}:r));
   };
 
   const removeRule = (idx) => {
@@ -1364,23 +1382,54 @@ function AgentCollaborationPanel({wsState}){
 
       <div style={{marginTop:14,background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:14,padding:"12px 12px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{fontSize:12,fontWeight:800,color:P.soft}}>🧭 任务分配规则（第二版）</div>
+          <div style={{fontSize:12,fontWeight:800,color:P.soft}}>🧭 任务分配规则（拖拽版）</div>
           <Btn small ghost onClick={addRule}>+ 添加规则</Btn>
         </div>
-        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点“添加规则”，告诉总管助手把什么任务交给谁。</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {handoffRules.map((r, idx)=>(
-            <div key={idx} style={{display:"grid",gridTemplateColumns:"1.4fr 1fr auto",gap:8,alignItems:"center"}}>
-              <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
-                placeholder="例如：写作任务 / 代码任务 / 资料收集"
-                style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-              <select value={r.to} onChange={e=>setRuleField(idx,"to",e.target.value)}
-                style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}}>
-                {agentIds.map(id => <option key={id} value={id}>{id}</option>)}
-              </select>
-              <Btn small color={P.coral} onClick={()=>removeRule(idx)}>删除</Btn>
+        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点“添加规则”，再拖到目标助手上。</div>}
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
+            <div style={{fontSize:11,fontWeight:800,color:P.soft,marginBottom:8}}>待分配任务（可拖拽）</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {handoffRules.map((r, idx)=>(
+                <div key={idx}
+                  draggable
+                  onDragStart={()=>setDragRuleIdx(idx)}
+                  onDragEnd={()=>{setDragRuleIdx(null);setHoverLane("");}}
+                  style={{background:dragRuleIdx===idx?"#EEF4FF":"#FAFAFE",border:`2px solid ${dragRuleIdx===idx?P.indigo:"#E8E8F5"}`,
+                    borderRadius:10,padding:"8px 10px",display:"flex",alignItems:"center",gap:8,cursor:"grab"}}>
+                  <span style={{fontSize:14,color:P.soft}}>⠿</span>
+                  <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
+                    placeholder="例如：写作任务 / 代码任务 / 资料收集"
+                    style={{flex:1,padding:"6px 8px",borderRadius:8,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
+                  <span style={{fontSize:11,color:P.soft,whiteSpace:"nowrap"}}>→ {r.to}</span>
+                  <button onClick={()=>removeRule(idx)} style={{border:"none",background:"#FFEAE6",color:P.coral,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>删</button>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
+            <div style={{fontSize:11,fontWeight:800,color:P.soft,marginBottom:8}}>把任务拖到助手上</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {agentIds.map((id)=>(
+                <div key={id}
+                  onDragOver={(e)=>{e.preventDefault();setHoverLane(id);}}
+                  onDragLeave={()=>setHoverLane("")}
+                  onDrop={()=>{if(dragRuleIdx!==null) moveRuleTo(dragRuleIdx,id); setDragRuleIdx(null); setHoverLane("");}}
+                  style={{border:`2px dashed ${hoverLane===id?P.indigo:"#DCDCEC"}`,
+                    background:hoverLane===id?"#EEF4FF":"#FCFCFF",borderRadius:10,padding:"8px 10px"}}>
+                  <div style={{fontSize:12,fontWeight:800,color:P.ink,marginBottom:4}}>{id}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {handoffRules.filter(r=>r.to===id).map((r,i)=>(
+                      <span key={`${id}-${i}`} style={{fontSize:11,background:"#EAF7F2",color:P.teal,border:"1px solid #BFE8D8",borderRadius:999,padding:"3px 8px"}}>{r.task}</span>
+                    ))}
+                    {handoffRules.filter(r=>r.to===id).length===0 && <span style={{fontSize:11,color:P.soft}}>拖任务到这里</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
