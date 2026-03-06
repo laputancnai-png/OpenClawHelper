@@ -133,10 +133,18 @@ export function useFileServer(): UseFileServerReturn {
   }, [writeFile]);
 
   const deleteAgentFiles = useCallback(async (agentId: string): Promise<void> => {
-    await fetchJSON(
-      `${FILE_SERVER}/api/agent?id=${encodeURIComponent(agentId)}`,
-      { method: "DELETE" }
-    );
+    try {
+      await fetchJSON(
+        `${FILE_SERVER}/api/agent?id=${encodeURIComponent(agentId)}`,
+        { method: "DELETE" }
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("Unknown endpoint: DELETE /api/agent")) {
+        throw new Error("当前文件服务版本较旧（缺少 DELETE /api/agent）。请重启 OpenClawHelper 本地服务后重试。\n建议执行：在 OpenClawHelper 目录重新运行 npm run dev");
+      }
+      throw e;
+    }
   }, []);
 
   return { status, workspace, reloadWorkspace, readFile, writeFile, readSoul, writeSoul, deleteAgentFiles };
