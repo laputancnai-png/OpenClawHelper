@@ -82,34 +82,36 @@ const AGENT_TEMPLATES = [
     soulStarter:`# 数据助手\n\n## 角色\n你是一位专业的数据分析师，擅长把复杂的数字和表格变成人人都能看懂的结论。\n\n## 风格\n- 先说最重要的结论\n- 用简单的数字说明问题\n- 避免让人看不懂的统计学术语` },
 ];
 
-const starterAgentsMd = (label) => `# AGENTS.md - ${label}
+const starterAgentsMd = (label) => `# ${label} 入职手册（AGENTS.md）
 
-## 角色与目标
-- 你是「${label}」助手。
-- 优先完成用户明确请求，避免臆测。
+## 角色定位
+- 你是「${label}」助手，专注当前职责范围。
+- 先理解需求，再输出可执行结果。
 
-## 工作方式
+## 工作原则
 - 先给结论，再给关键依据。
-- 需要时给步骤化建议，保持简洁。
-- 不确定时明确说明不确定点。
+- 复杂任务拆步骤，语言简洁清楚。
+- 不确定时明确说明，并给下一步建议。
 
-## 安全边界
-- 不执行高风险或破坏性动作，除非用户明确确认。
-- 涉及外部发送（消息/邮件/发布）前先二次确认。
+## 禁止事项
+- 未确认前不执行高风险或破坏性动作。
+- 不编造事实，不假装已完成未完成的操作。
+- 涉及外发（消息/邮件/发布）前先确认。
 `;
 
-const starterUserMd = () => `# USER.md
+const starterUserMd = () => `# 用户资料（USER.md）
 
-## 用户偏好（可编辑）
+## 用户偏好
 - 称呼：
-- 语言偏好：中文
+- 语言：中文
 - 输出偏好：先结论后细节
 
-## 长期目标（可编辑）
+## 关注重点
 - 
 
-## 备注
-- 这个文件由用户长期维护，系统不会自动覆盖。
+## 协作约定
+- 若任务超过 3 分钟，主动汇报：进展 / 卡点 / 下一步。
+- 本文件由用户长期维护，系统不会自动覆盖已有内容。
 `;
 
 const CHANNEL_OPTIONS = [
@@ -135,6 +137,21 @@ const EASY_FIELDS=[
   {key:"tone",       icon:"💬",label:"说话方式",ph:"它怎么和用户说话？正式还是轻松？"},
   {key:"forbidden",  icon:"🚫",label:"不能做",ph:"有什么它绝对不该做的事情？"},
 ];
+
+const DOC_EASY_FIELDS = {
+  agents: [
+    { key:"role", icon:"🧭", label:"角色定位", ph:"它在团队里主要负责什么？" },
+    { key:"rules", icon:"📏", label:"工作原则", ph:"它做事必须遵守哪些原则？" },
+    { key:"style", icon:"🗣️", label:"输出风格", ph:"它输出时要保持什么风格？" },
+    { key:"ban", icon:"⛔", label:"禁止事项", ph:"有哪些绝对不能做的事？" },
+  ],
+  user: [
+    { key:"name", icon:"🙋", label:"称呼与关系", ph:"应该怎么称呼用户？" },
+    { key:"prefs", icon:"🎯", label:"用户偏好", ph:"用户在沟通与输出上的偏好？" },
+    { key:"goals", icon:"🚀", label:"长期目标", ph:"用户最近最关注的目标是什么？" },
+    { key:"notes", icon:"📝", label:"协作备注", ph:"还有哪些长期协作约定？" },
+  ],
+};
 
 const STEPS=[
   {n:1,emoji:"🤖",label:"选助手"},{n:2,emoji:"📝",label:"写入职材料"},
@@ -380,6 +397,92 @@ function SoulEditor({agent,soul,onChange}){
   );
 }
 
+function DocMaterialEditor({agent,docType,value,onChange}){
+  const t=AGENT_TEMPLATES.find(x=>x.label===agent.label);
+  const [bg,border,dot]=cardC(t.cardColor);
+  const [tab,setTab]=useState("easy");
+  const [easy,setEasy]=useState({role:"",rules:"",style:"",ban:"",name:"",prefs:"",goals:"",notes:""});
+
+  const isAgents = docType === "agents";
+  const fields = isAgents ? DOC_EASY_FIELDS.agents : DOC_EASY_FIELDS.user;
+  const template = isAgents ? starterAgentsMd(agent.label) : starterUserMd();
+
+  const buildFromEasy = (e) => {
+    if (isAgents) {
+      return `# ${agent.label} 入职手册（AGENTS.md）\n\n## 角色定位\n${e.role||"（未填写）"}\n\n## 工作原则\n${e.rules||"（未填写）"}\n\n## 输出风格\n${e.style||"（未填写）"}\n\n## 禁止事项\n${e.ban||"（未填写）"}`;
+    }
+    return `# 用户资料（USER.md）\n\n## 称呼与关系\n${e.name||"（未填写）"}\n\n## 用户偏好\n${e.prefs||"（未填写）"}\n\n## 长期目标\n${e.goals||"（未填写）"}\n\n## 协作备注\n${e.notes||"（未填写）"}`;
+  };
+
+  const handleEasy = (key,val) => {
+    const next = {...easy,[key]:val};
+    setEasy(next);
+    onChange(buildFromEasy(next));
+  };
+
+  const wordCount=value?.trim().length||0;
+  const fillLevel=Math.min(100,Math.round(wordCount/4));
+  const fillColor=fillLevel<20?"#FFB899":fillLevel<60?"#FFE066":dot;
+
+  return(
+    <div style={{background:P.white,border:`3px solid ${border}`,borderRadius:22,overflow:"hidden",boxShadow:`0 6px 24px ${border}55`}}>
+      <div style={{background:bg,padding:"16px 20px",borderBottom:`2px solid ${border}66`}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:48,height:48,borderRadius:16,background:P.white,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,boxShadow:`0 4px 12px ${border}88`}}>{t.emoji}</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"Fredoka One,cursive",fontSize:18,color:P.ink}}>{isAgents?"AGENTS.md":"USER.md"}</div>
+            <div style={{fontSize:12,color:P.soft}}>{isAgents?"定义助手工作准则":"定义用户长期偏好与协作方式"}</div>
+          </div>
+          <div style={{textAlign:"center",minWidth:60}}>
+            <div style={{fontSize:11,color:P.soft,fontWeight:700,marginBottom:4}}>{fillLevel<20?"还没写":"写得不错"}{fillLevel>=80?" 🌟":""}</div>
+            <div style={{width:60,height:8,background:"#0000001A",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${fillLevel}%`,background:fillColor,borderRadius:4,transition:"width 0.4s ease"}}/></div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:0,background:"#0000001A",borderRadius:12,padding:3,marginTop:14,width:"fit-content"}}>
+          {[ ["easy","✨ 简单模式"], ["advanced","✏️ 自由编辑"] ].map(([id,lbl])=>(
+            <button key={id} onClick={()=>setTab(id)} style={{background:tab===id?"#fff":"none",border:"none",borderRadius:10,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer",color:tab===id?P.ink:P.soft}}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{padding:"20px 22px"}}>
+        {tab==="easy" && (
+          <div className="slide-up">
+            <div style={{background:"#F0F4FF",borderRadius:12,padding:"10px 14px",fontSize:13,color:"#4050A0",fontWeight:600,marginBottom:16,display:"flex",alignItems:"flex-start",gap:8,lineHeight:1.5}}>
+              <span>💡</span><span>{isAgents?"把它当成助手的工作手册来写，越清晰越稳定。":"把它当成用户档案来写，越具体越懂你。"}</span>
+            </div>
+            {fields.map(f=>(
+              <div key={f.key} style={{marginBottom:14}}>
+                <div style={{fontSize:13,fontWeight:800,color:P.soft,marginBottom:6,display:"flex",alignItems:"center",gap:6}}><span>{f.icon}</span>{f.label}</div>
+                <input value={easy[f.key]||""} onChange={e=>handleEasy(f.key,e.target.value)} placeholder={f.ph}
+                  style={{width:"100%",padding:"11px 14px",borderRadius:12,border:"2px solid #E8E8F5",fontSize:13,fontFamily:"Nunito,sans-serif",color:P.ink,background:"#FAFAFE"}}
+                />
+              </div>
+            ))}
+            <div style={{marginTop:18,padding:"14px 16px",background:"#F8F8FF",border:"2px dashed #D0D0EE",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div>
+                <div style={{fontWeight:800,fontSize:13,color:P.ink,marginBottom:2}}>📋 使用中文模板</div>
+                <div style={{fontSize:12,color:P.soft}}>一键填入中文模板，后续你可继续修改</div>
+              </div>
+              <Btn small color={dot} onClick={()=>{onChange(template);setTab("advanced");}}>用模板 →</Btn>
+            </div>
+          </div>
+        )}
+        {tab==="advanced" && (
+          <div className="slide-up">
+            <div style={{background:"#FAFAFE",borderRadius:12,padding:"10px 14px",fontSize:13,color:P.soft,marginBottom:12,display:"flex",alignItems:"flex-start",gap:8,lineHeight:1.5}}>
+              <span>📝</span><span>{isAgents?"直接编辑助手的入职手册（AGENTS.md）。":"直接编辑用户资料（USER.md）。"}</span>
+            </div>
+            <textarea value={value} onChange={e=>onChange(e.target.value)} rows={14} placeholder={template}
+              style={{width:"100%",padding:"14px 16px",borderRadius:14,border:"2px solid #E8E8F5",fontSize:13,fontFamily:"'Courier New',Courier,monospace",lineHeight:1.7,resize:"vertical",background:"#FCFCFF",color:P.ink}}
+            />
+            <div style={{marginTop:8,textAlign:"right",fontSize:11,color:P.soft}}>{wordCount} 字</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Step2({picked,souls,agentsDocs,userDocs,onSoulChange,onAgentsDocChange,onUserDocChange,onNext,onBack}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const [cur,setCur]=useState(0);
@@ -426,26 +529,12 @@ function Step2({picked,souls,agentsDocs,userDocs,onSoulChange,onAgentsDocChange,
       {docTab==="soul" && <SoulEditor agent={agent} soul={souls[agent.label]||""} onChange={v=>onSoulChange(agent.label,v)}/>}
 
       {docTab!=="soul" && (
-        <div style={{background:P.white,border:`3px solid ${border}`,borderRadius:22,overflow:"hidden",boxShadow:`0 6px 24px ${border}55`}}>
-          <div style={{background:bg,padding:"14px 18px",borderBottom:`2px solid ${border}66`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{fontFamily:"Fredoka One,cursive",fontSize:17,color:P.ink}}>
-              {docTab==="agents"?"📘 AGENTS.md":"👤 USER.md"}
-            </div>
-            <Btn small color={dot} onClick={()=>{
-              if(docTab==="agents") onAgentsDocChange(agent.label, starterAgentsMd(agent.label));
-              else onUserDocChange(agent.label, starterUserMd());
-            }}>用模板</Btn>
-          </div>
-          <div style={{padding:"18px 20px"}}>
-            <textarea
-              rows={14}
-              value={docTab==="agents"?(agentsDocs[agent.label]||""):(userDocs[agent.label]||"")}
-              onChange={e=>docTab==="agents"?onAgentsDocChange(agent.label,e.target.value):onUserDocChange(agent.label,e.target.value)}
-              placeholder={docTab==="agents"?starterAgentsMd(agent.label):starterUserMd()}
-              style={{width:"100%",padding:"14px 16px",borderRadius:14,border:"2px solid #E8E8F5",fontSize:13,fontFamily:"'Courier New',Courier,monospace",lineHeight:1.7,resize:"vertical",background:"#FCFCFF",color:P.ink}}
-            />
-          </div>
-        </div>
+        <DocMaterialEditor
+          agent={agent}
+          docType={docTab}
+          value={docTab==="agents"?(agentsDocs[agent.label]||""):(userDocs[agent.label]||"")}
+          onChange={(v)=>docTab==="agents"?onAgentsDocChange(agent.label,v):onUserDocChange(agent.label,v)}
+        />
       )}
 
       <div style={{display:"flex",justifyContent:"space-between",marginTop:24}}>
