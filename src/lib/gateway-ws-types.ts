@@ -64,9 +64,9 @@ export type ConnectParams = {
     id: string;
     version: string;
     platform: string;
-    mode: "operator";
+    mode: "ui" | "webchat" | "cli" | "backend" | "node" | "probe" | "test";
   };
-  role: "operator";
+  role: string;
   scopes: string[];
   caps: string[];
   commands: string[];
