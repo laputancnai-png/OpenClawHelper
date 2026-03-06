@@ -73,6 +73,9 @@ export type UseFileServerReturn = {
 
   // Convenience: write SOUL.md for a given agentId
   writeSoul: (agentId: string, content: string) => Promise<void>;
+
+  // Delete agent filesystem directories (workspace-<id> + agents/<id>)
+  deleteAgentFiles: (agentId: string) => Promise<void>;
 };
 
 export function useFileServer(): UseFileServerReturn {
@@ -129,5 +132,12 @@ export function useFileServer(): UseFileServerReturn {
     await writeFile(soulPath(agentId), content);
   }, [writeFile]);
 
-  return { status, workspace, reloadWorkspace, readFile, writeFile, readSoul, writeSoul };
+  const deleteAgentFiles = useCallback(async (agentId: string): Promise<void> => {
+    await fetchJSON(
+      `${FILE_SERVER}/api/agent?id=${encodeURIComponent(agentId)}`,
+      { method: "DELETE" }
+    );
+  }, []);
+
+  return { status, workspace, reloadWorkspace, readFile, writeFile, readSoul, writeSoul, deleteAgentFiles };
 }

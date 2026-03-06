@@ -25,6 +25,8 @@ import type {
   GatewayError,
   SessionsListResult,
   SessionsDeleteResult,
+  CronListResult,
+  CronRemoveResult,
 } from "./gateway-ws-types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -174,6 +176,14 @@ export class GatewayClient {
 
   async sessionsDelete(key: string): Promise<SessionsDeleteResult> {
     return this._request<SessionsDeleteResult>("sessions.delete", { key });
+  }
+
+  async cronList(): Promise<CronListResult> {
+    return this._request<CronListResult>("cron.list", {});
+  }
+
+  async cronRemove(id: string): Promise<CronRemoveResult> {
+    return this._request<CronRemoveResult>("cron.rm", { id });
   }
 
   // ── Core RPC ────────────────────────────────────────────────────────────────

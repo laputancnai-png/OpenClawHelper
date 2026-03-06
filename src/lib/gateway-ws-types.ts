@@ -208,3 +208,20 @@ export type SessionsDeleteResult = {
   deleted?: boolean;
   archived?: string[];
 };
+
+// ── cron.list / cron.rm (for agent deletion cleanup) ─────────────────────────
+
+export type CronListResult = {
+  jobs?: Array<{
+    id: string;
+    agentId?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+};
+
+export type CronRemoveResult = {
+  ok?: boolean;
+  removed?: boolean;
+  [key: string]: unknown;
+};

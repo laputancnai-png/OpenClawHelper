@@ -76,7 +76,7 @@ function json(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin":  origin,
-    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(payload);
@@ -211,12 +211,56 @@ async function handleFileWrite(req, res, relPath) {
   }
 }
 
+/**
+ * DELETE /api/agent?id=<agentId>
+ * Removes:
+ *   ~/.openclaw/workspace-<id>
+ *   ~/.openclaw/agents/<id>
+ */
+async function handleAgentDelete(req, res, agentId) {
+  if (!agentId) return json(res, 400, { error: "id query param required" });
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+    return json(res, 400, { error: "invalid agent id" });
+  }
+  if (agentId === "main") return json(res, 400, { error: "main agent cannot be deleted" });
+
+  const targets = [
+    path.join(OPENCLAW_HOME, `workspace-${agentId}`),
+    path.join(OPENCLAW_HOME, "agents", agentId),
+  ];
+
+  const removed = [];
+  const missing = [];
+
+  try {
+    for (const t of targets) {
+      if (!t.startsWith(OPENCLAW_HOME + path.sep)) {
+        throw new Error(`Unsafe delete path: ${t}`);
+      }
+      try {
+        await fs.rm(t, { recursive: true, force: false });
+        removed.push(t);
+      } catch (e) {
+        if (e?.code === "ENOENT") {
+          missing.push(t);
+          continue;
+        }
+        throw e;
+      }
+    }
+    return json(res, 200, { ok: true, id: agentId, removed, missing });
+  } catch (e) {
+    return json(res, 500, { error: e.message, id: agentId, removed, missing });
+  }
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
   const pathname = url.pathname;
   const relPath = url.searchParams.get("path") ?? "";
+  const agentId = url.searchParams.get("id") ?? "";
 
   console.log(`[FileServer] ${req.method} ${pathname}${relPath ? `?path=${relPath}` : ""}`);
 
@@ -224,7 +268,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "http://localhost:5173",
-      "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     return res.end();
@@ -242,6 +286,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === "/api/file" && req.method === "PUT") {
       return await handleFileWrite(req, res, relPath);
+    }
+    if (pathname === "/api/agent" && req.method === "DELETE") {
+      return await handleAgentDelete(req, res, agentId);
     }
     // ── Static files (production build) ─────────────────────────────────────
     if (req.method === "GET" && fssync.existsSync(DIST_DIR)) {

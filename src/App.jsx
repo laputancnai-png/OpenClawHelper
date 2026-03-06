@@ -1198,9 +1198,11 @@ function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}
 
 function ExistingAgentsPanel({wsState, onEditAgent}){
   const wsConnected = wsState === "connected";
+  const { deleteAgentFiles } = useFileServer();
   const [agents, setAgents] = useState([]);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const loadAgents = useCallback(async () => {
     if (!wsConnected) {
@@ -1237,6 +1239,58 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
     if (wsConnected) loadAgents();
   }, [wsConnected, loadAgents]);
 
+  const handleDeleteAgent = useCallback(async (agentId) => {
+    if (!agentId || agentId === "main") {
+      setMessage("main 不能删除。");
+      return;
+    }
+
+    const ok = window.confirm(`确认删除 Agent: ${agentId} ?\n\n将同时删除：\n- agents.list + bindings 引用\n- 该 Agent 会话\n- 该 Agent cron（默认）\n- ~/.openclaw/workspace-${agentId}\n- ~/.openclaw/agents/${agentId}`);
+    if (!ok) return;
+
+    setDeletingId(agentId);
+    setMessage("");
+
+    try {
+      const client = getGatewayClient();
+      const snapshot = await client.configGet();
+
+      const newAgentList = (snapshot.config?.agents?.list ?? []).filter(a => a.id !== agentId);
+      const newBindings = (snapshot.config?.bindings ?? []).filter(b => b.agentId !== agentId);
+
+      await client.configPatch({
+        raw: JSON.stringify({ agents: { list: newAgentList }, bindings: newBindings }, null, 2),
+        baseHash: snapshot.hash,
+        note: `OpenClawHelper: delete agent ${agentId}`,
+        restartDelayMs: 2000,
+      });
+
+      const listed = await client.sessionsList(500);
+      const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
+      const targetKeys = keys.filter(k => k.startsWith(`agent:${agentId}:`) || k === `agent:${agentId}`);
+      for (const key of targetKeys) {
+        try { await client.sessionsDelete(key); } catch { /* best effort */ }
+      }
+
+      try {
+        const cron = await client.cronList();
+        const jobs = cron.jobs || [];
+        const targetCronIds = jobs.filter(j => j.agentId === agentId).map(j => j.id).filter(Boolean);
+        for (const id of targetCronIds) {
+          try { await client.cronRemove(id); } catch { /* best effort */ }
+        }
+      } catch { /* cron cleanup best effort */ }
+
+      await deleteAgentFiles(agentId);
+      setMessage(`已删除 Agent ${agentId}（配置、会话、cron、目录已清理）。`);
+      await loadAgents();
+    } catch (e) {
+      setMessage(`删除失败：${e?.message ?? String(e)}`);
+    } finally {
+      setDeletingId("");
+    }
+  }, [deleteAgentFiles, loadAgents]);
+
   return(
     <div style={{background:P.white,borderRadius:18,padding:"16px 18px",marginBottom:14,
       boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
@@ -1256,13 +1310,22 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:8}}>
           {agents.map((a)=>{
             const [bg,border] = cardC(a.cardColor);
+            const deleting = deletingId === a.id;
             return (
               <div key={a.id}
-                onClick={()=>a.supported && onEditAgent?.(a.id)}
+                onClick={()=>a.supported && !deleting && onEditAgent?.(a.id)}
                 style={{background:a.supported?bg:P.white,border:`3px solid ${a.supported?border:"#EAEAF5"}`,
                   borderRadius:20,padding:"14px 12px",textAlign:"center",cursor:a.supported?"pointer":"not-allowed",
                   opacity:a.supported?1:0.65,boxShadow:a.supported?`0 6px 18px ${border}44`:"0 2px 8px #0000000A",
-                  transition:"all 0.18s ease"}}>
+                  transition:"all 0.18s ease",position:"relative"}}>
+                {a.id !== "main" && (
+                  <button
+                    onClick={(e)=>{e.stopPropagation(); if(!deletingId) handleDeleteAgent(a.id);}}
+                    title={`删除 ${a.id}`}
+                    style={{position:"absolute",top:8,right:8,width:24,height:24,borderRadius:"50%",border:"none",background:deleting?"#FFB4A6":P.coral,color:"#fff",fontWeight:900,cursor:deletingId?"wait":"pointer",lineHeight:1}}>
+                    {deleting?"…":"X"}
+                  </button>
+                )}
                 <div style={{fontSize:30,marginBottom:6}}>{a.emoji}</div>
                 <div style={{fontFamily:"Fredoka One,cursive",fontSize:15,color:P.ink,marginBottom:4}}>{a.label}</div>
                 <div style={{fontSize:11,color:P.soft,lineHeight:1.4}}>{a.supported?a.desc:"该 Agent 暂不支持可视化编辑"}</div>
@@ -1272,7 +1335,7 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
         </div>
       )}
 
-      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:P.coral}}>{message}</div>}
+      {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:message.startsWith("已删除")?P.teal:P.coral}}>{message}</div>}
     </div>
   );
 }
