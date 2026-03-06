@@ -20,8 +20,6 @@ import path from "path";
 import os from "os";
 import { createReadStream } from "fs";
 import { fileURLToPath } from "url";
-import { execFile } from "child_process";
-import { promisify } from "util";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR  = path.resolve(__dirname, "../dist"); // Vite build output
@@ -30,7 +28,6 @@ const DIST_DIR  = path.resolve(__dirname, "../dist"); // Vite build output
 
 const PORT = 3131;
 const HOST = "127.0.0.1"; // loopback only — never expose externally
-const execFileAsync = promisify(execFile);
 
 // Resolve workspace: honours OPENCLAW_WORKSPACE env var, else default
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE
@@ -94,13 +91,6 @@ function readBody(req) {
   });
 }
 
-async function runOpenclaw(args, timeoutMs = 120000) {
-  const { stdout, stderr } = await execFileAsync("openclaw", args, {
-    timeout: timeoutMs,
-    maxBuffer: 2 * 1024 * 1024,
-  });
-  return { stdout: stdout?.toString?.() ?? "", stderr: stderr?.toString?.() ?? "" };
-}
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
@@ -235,60 +225,33 @@ async function handleAgentDelete(req, res, agentId) {
   }
   if (agentId === "main") return json(res, 400, { error: "main agent cannot be deleted" });
 
-  const report = {
-    id: agentId,
-    cronRemoved: [],
-    cronErrors: [],
-    deleteSummary: null,
-    gatewayRestarted: false,
-  };
+  const targets = [
+    path.join(OPENCLAW_HOME, `workspace-${agentId}`),
+    path.join(OPENCLAW_HOME, "agents", agentId),
+  ];
 
-  let gatewayStopped = false;
+  const removed = [];
+  const missing = [];
+
   try {
-    // 1) Remove cron jobs for this agent while gateway is up
-    try {
-      const listed = await runOpenclaw(["cron", "list", "--json"], 120000);
-      const parsed = JSON.parse(listed.stdout || "{}");
-      const jobs = parsed?.jobs || [];
-      const targets = jobs.filter(j => j?.agentId === agentId).map(j => j.id).filter(Boolean);
-      for (const id of targets) {
-        try {
-          await runOpenclaw(["cron", "rm", id, "--json"], 120000);
-          report.cronRemoved.push(id);
-        } catch (e) {
-          report.cronErrors.push(`cron ${id}: ${e?.message ?? String(e)}`);
-        }
+    for (const t of targets) {
+      if (!t.startsWith(OPENCLAW_HOME + path.sep)) {
+        throw new Error(`Unsafe delete path: ${t}`);
       }
-    } catch (e) {
-      report.cronErrors.push(`cron list failed: ${e?.message ?? String(e)}`);
-    }
-
-    // 2) Stop gateway (maintenance mode)
-    await runOpenclaw(["gateway", "stop"], 120000);
-    gatewayStopped = true;
-
-    // 3) Delete agent (config + files + sessions)
-    const del = await runOpenclaw(["agents", "delete", agentId, "--force", "--json"], 120000);
-    try {
-      report.deleteSummary = JSON.parse(del.stdout || "{}");
-    } catch {
-      report.deleteSummary = { raw: del.stdout };
-    }
-
-    // 4) Start gateway again
-    await runOpenclaw(["gateway", "start"], 120000);
-    report.gatewayRestarted = true;
-
-    return json(res, 200, { ok: true, report });
-  } catch (e) {
-    // best effort: if we stopped it, try to start back
-    if (gatewayStopped) {
       try {
-        await runOpenclaw(["gateway", "start"], 120000);
-        report.gatewayRestarted = true;
-      } catch {}
+        await fs.rm(t, { recursive: true, force: false });
+        removed.push(t);
+      } catch (e) {
+        if (e?.code === "ENOENT") {
+          missing.push(t);
+          continue;
+        }
+        throw e;
+      }
     }
-    return json(res, 500, { error: e?.message ?? String(e), report });
+    return json(res, 200, { ok: true, id: agentId, removed, missing });
+  } catch (e) {
+    return json(res, 500, { error: e.message, id: agentId, removed, missing });
   }
 }
 
