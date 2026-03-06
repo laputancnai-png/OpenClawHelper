@@ -836,7 +836,7 @@ function ConnectionBanner(){
       border:`2px solid ${allOk?"#A8EDD0":wsState==="connecting"||wsState==="reconnecting"?"#FFE066":"#FFB8A8"}`,
       borderRadius:14,padding:"7px 14px",fontSize:12,fontWeight:700,
       color:allOk?"#1A6A4A":wsState==="connecting"||wsState==="reconnecting"?"#8A6A00":"#8B2020",
-      flexWrap:"wrap",gap:8}}>
+      flexWrap:"wrap"}}>
       <span style={{display:"flex",alignItems:"center",gap:5}}>
         <span style={{width:7,height:7,borderRadius:"50%",background:wsOk?P.teal:"#FFB899",
           display:"inline-block",boxShadow:wsOk?`0 0 6px ${P.teal}`:"none"}}/>
