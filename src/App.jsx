@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// App.jsx — OpenClawHelper
+// App.jsx - OpenClawHelper
 // Wires the friendly UI prototype to real GatewayClient + FileServer hooks.
 //
 // Data flow:
@@ -7,7 +7,7 @@
 //   Step 5:   "启动" button triggers:
 //               1. writeSoul()     for each agent with custom SOUL.md (FileServer)
 //               2. config.patch()  agents.list + bindings + session  (Gateway WS)
-//               3. show success / error inline — no terminal needed
+//               3. show success / error inline - no terminal needed
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from "react";
@@ -107,7 +107,7 @@ const starterUserMd = () => `# 用户资料（USER.md）
 - 输出偏好：先结论后细节
 
 ## 关注重点
-- 
+-
 
 ## 协作约定
 - 若任务超过 3 分钟，主动汇报：进展 / 卡点 / 下一步。
@@ -696,7 +696,7 @@ function Step4({privacy,setPrivacy,onNext,onBack}){
   );
 }
 
-// ── Step 5: Launch — REAL Gateway + FileServer ─────────────────────────────────
+// ── Step 5: Launch - REAL Gateway + FileServer ─────────────────────────────────
 function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnected,wsState,editMode=false,baseAgentList=[],baseBindings=[]}){
   const agents=AGENT_TEMPLATES.filter(t=>picked.includes(t.label));
   const privOpt=PRIVACY_OPTIONS.find(p=>p.id===privacy);
@@ -779,7 +779,7 @@ function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnecte
           if (createdUser) log(true, `${agent.emoji} ${agent.label}：已初始化 USER.md`);
         }
       } catch(e) {
-        log(false, `${agent.emoji} ${agent.label}：文件写入失败 — ${e.message}`);
+        log(false, `${agent.emoji} ${agent.label}：文件写入失败 - ${e.message}`);
         setErrorMsg("文件写入失败，请检查文件服务器是否在运行（npm run dev）");
         setLaunchStatus("error");
         return;
@@ -890,7 +890,7 @@ function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnecte
       log(true, "Gateway 重启完成，所有助手已上线 ✓");
       setLaunchStatus("success");
     } catch {
-      // Gateway still restarting — not fatal, just note it
+      // Gateway still restarting - not fatal, just note it
       log(true, "Gateway 重启中，稍后刷新页面可确认状态");
       setLaunchStatus("success");
     }
@@ -1384,7 +1384,7 @@ function AgentCollaborationPanel({wsState}){
           <div style={{fontSize:12,fontWeight:800,color:P.soft}}>🧭 任务分配规则（拖拽版）</div>
           <Btn small ghost onClick={addRule}>+ 添加规则</Btn>
         </div>
-        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点“添加规则”，再拖到目标助手上。</div>}
+        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点"添加规则"，再拖到目标助手上。</div>}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{background:P.white,border:"2px solid #E8E8F5",borderRadius:12,padding:"10px"}}>
@@ -1639,6 +1639,7 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
 
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function App(){
+  const [page,    setPage]    = useState("home"); // home | agents | collab
   const [step,    setStep]    = useState(1);
   const [picked,  setPicked]  = useState([]);
   const [souls,   setSouls]   = useState({});
@@ -1720,6 +1721,7 @@ export default function App(){
       }));
 
     setRules(existingRules);
+    setPage("agents");
     setStep(2);
   }, [souls, readFile]);
 
@@ -1750,12 +1752,7 @@ export default function App(){
         </div>
 
         {/* Main */}
-        <div style={{maxWidth:700,margin:"36px auto 0",padding:"0 20px"}}>
-          <div style={{background:P.white,borderRadius:22,padding:"20px 28px",marginBottom:14,
-            boxShadow:"0 4px 18px #00000010",border:"2px solid #EBEBF8"}}>
-            <StepBar current={step}/>
-          </div>
-
+        <div style={{maxWidth:880,margin:"36px auto 0",padding:"0 20px"}}>
           <ConnectionSettings
             wsState={wsState}
             token={token}
@@ -1764,39 +1761,78 @@ export default function App(){
             onReconnect={reconnect}
           />
 
-          <ExistingAgentsPanel
-            wsState={wsState}
-            onEditAgent={(agentId)=>{ startEditExistingAgent(agentId).catch(()=>{}); }}
-          />
+          {page === "home" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div onClick={()=>{setPage("agents");setStep(1);}}
+                style={{background:P.white,borderRadius:22,padding:"24px 22px",cursor:"pointer",
+                  boxShadow:"0 8px 24px #00000010",border:"2px solid #EBEBF8"}}>
+                <div style={{fontSize:32,marginBottom:8}}>🧩</div>
+                <div style={{fontFamily:"Fredoka One,cursive",fontSize:22,color:P.ink,marginBottom:6}}>设置 Agents</div>
+                <div style={{fontSize:13,color:P.soft,lineHeight:1.6}}>管理现有助手，并创建你想要的新助手。</div>
+              </div>
+              <div onClick={()=>setPage("collab")}
+                style={{background:P.white,borderRadius:22,padding:"24px 22px",cursor:"pointer",
+                  boxShadow:"0 8px 24px #00000010",border:"2px solid #EBEBF8"}}>
+                <div style={{fontSize:32,marginBottom:8}}>🔁</div>
+                <div style={{fontFamily:"Fredoka One,cursive",fontSize:22,color:P.ink,marginBottom:6}}>助手协作</div>
+                <div style={{fontSize:13,color:P.soft,lineHeight:1.6}}>配置助手之间如何互相配合完成任务。</div>
+              </div>
+            </div>
+          )}
 
-          <AgentCollaborationPanel wsState={wsState} />
+          {page === "agents" && (
+            <>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <Btn ghost small onClick={()=>setPage("home")}>← 返回首页</Btn>
+              </div>
 
-          <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
-            boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
-            {step===1&&<Step1 picked={picked}
-              onToggle={l=>{setEditMode(false);setPicked(p=>p.includes(l)?p.filter(x=>x!==l):[...p,l]);}}
-              onNext={()=>{setEditMode(false);setStep(2);}}/>}
-            {step===2&&<Step2 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs}
-              onSoulChange={(l,v)=>setSouls(s=>({...s,[l]:v}))}
-              onAgentsDocChange={(l,v)=>setAgentsDocs(s=>({...s,[l]:v}))}
-              onUserDocChange={(l,v)=>setUserDocs(s=>({...s,[l]:v}))}
-              onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>}
-            {step===3&&<Step3 picked={picked} rules={rules}
-              onAddRule={r=>setRules(p=>[...p,r])}
-              onRemoveRule={(al,ch)=>setRules(p=>p.filter(r=>!(r.agentLabel===al&&r.channelId===ch)))}
-              onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>}
-            {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
-              onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>}
-            {step===5&&<Step5 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs} rules={rules}
-              privacy={privacy}
-              onEdit={()=>setStep(1)}
-              wsConnected={wsState==="connected"}
-              wsState={wsState}
-              editMode={editMode}
-              baseAgentList={baseAgentList}
-              baseBindings={baseBindings}
-            />}
-          </div>
+              <ExistingAgentsPanel
+                wsState={wsState}
+                onEditAgent={(agentId)=>{ startEditExistingAgent(agentId).catch(()=>{}); }}
+              />
+
+              <div style={{background:P.white,borderRadius:22,padding:"20px 28px",marginBottom:14,
+                boxShadow:"0 4px 18px #00000010",border:"2px solid #EBEBF8"}}>
+                <StepBar current={step}/>
+              </div>
+
+              <div style={{background:P.white,borderRadius:28,padding:"34px 36px",
+                boxShadow:"0 8px 40px #00000012",border:"2px solid #EBEBF8"}}>
+                {step===1&&<Step1 picked={picked}
+                  onToggle={l=>{setEditMode(false);setPicked(p=>p.includes(l)?p.filter(x=>x!==l):[...p,l]);}}
+                  onNext={()=>{setEditMode(false);setStep(2);}}/>}
+                {step===2&&<Step2 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs}
+                  onSoulChange={(l,v)=>setSouls(s=>({...s,[l]:v}))}
+                  onAgentsDocChange={(l,v)=>setAgentsDocs(s=>({...s,[l]:v}))}
+                  onUserDocChange={(l,v)=>setUserDocs(s=>({...s,[l]:v}))}
+                  onNext={()=>setStep(3)} onBack={()=>setStep(1)}/>} 
+                {step===3&&<Step3 picked={picked} rules={rules}
+                  onAddRule={r=>setRules(p=>[...p,r])}
+                  onRemoveRule={(al,ch)=>setRules(p=>p.filter(r=>!(r.agentLabel===al&&r.channelId===ch)))}
+                  onNext={()=>setStep(4)} onBack={()=>setStep(2)}/>} 
+                {step===4&&<Step4 privacy={privacy} setPrivacy={setPrivacy}
+                  onNext={()=>setStep(5)} onBack={()=>setStep(3)}/>} 
+                {step===5&&<Step5 picked={picked} souls={souls} agentsDocs={agentsDocs} userDocs={userDocs} rules={rules}
+                  privacy={privacy}
+                  onEdit={()=>setStep(1)}
+                  wsConnected={wsState==="connected"}
+                  wsState={wsState}
+                  editMode={editMode}
+                  baseAgentList={baseAgentList}
+                  baseBindings={baseBindings}
+                />}
+              </div>
+            </>
+          )}
+
+          {page === "collab" && (
+            <>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <Btn ghost small onClick={()=>setPage("home")}>← 返回首页</Btn>
+              </div>
+              <AgentCollaborationPanel wsState={wsState} />
+            </>
+          )}
         </div>
       </div>
     </>
