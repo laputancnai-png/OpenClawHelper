@@ -1396,17 +1396,15 @@ function AgentCollaborationPanel({wsState}){
                   onDragStart={()=>setDragRuleIdx(idx)}
                   onDragEnd={()=>{setDragRuleIdx(null);setHoverLane("");}}
                   style={{background:dragRuleIdx===idx?"#EEF0FF":P.white,border:`3px solid ${dragRuleIdx===idx?P.indigo:"#E8E8F5"}`,
-                    borderRadius:16,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"grab",
+                    borderRadius:16,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,cursor:"grab",position:"relative",
                     transform:dragRuleIdx===idx?"scale(1.03) rotate(-1deg)":"scale(1)",transition:"all 0.15s",
                     boxShadow:dragRuleIdx===idx?`0 8px 24px ${P.indigo}55`:"0 2px 6px #0000000A"}}>
+                  <button onClick={(e)=>{e.stopPropagation(); removeRule(idx);}}
+                    style={{position:"absolute",top:-8,right:-8,width:22,height:22,borderRadius:"50%",border:"2px solid #fff",background:P.coral,color:"#fff",fontWeight:900,fontSize:12,cursor:"pointer",lineHeight:1,boxShadow:"0 4px 10px #FF6B4A44"}}>✕</button>
                   <span style={{fontSize:16,color:P.soft}}>⠿</span>
                   <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
                     placeholder="例如：写作任务 / 代码任务 / 资料收集"
                     style={{flex:1,padding:"6px 8px",borderRadius:8,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
-                  <button onClick={()=>moveRuleTo(idx,"__unassigned__")}
-                    style={{border:"none",background:"#FFF6E8",color:P.amber,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>移出</button>
-                  <button onClick={()=>removeRule(idx)}
-                    style={{border:"none",background:"#FFEAE6",color:P.coral,borderRadius:8,padding:"4px 7px",fontSize:11,fontWeight:800,cursor:"pointer"}}>删</button>
                 </div>
               ))}
               <Btn small ghost onClick={addRule}>+ 添加任务卡</Btn>
@@ -1426,8 +1424,11 @@ function AgentCollaborationPanel({wsState}){
                 <span style={{fontSize:20}}>📥</span>
                 <span style={{fontFamily:"Fredoka One,cursive",fontSize:14,color:P.ink,minWidth:68}}>未分配</span>
                 {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").length===0 && <span style={{fontSize:12,color:P.soft,fontStyle:"italic"}}>拖任务到这里可取消分配…</span>}
-                {handoffRules.filter(r=>!r.to || r.to==="__unassigned__").map((r,i)=>(
-                  <Pill key={`u-${i}`} bg="#FFF6E8" border="#F4D39A">📝 {r.task}</Pill>
+                {handoffRules.map((r,idx)=>({r,idx})).filter(x=>!x.r.to || x.r.to==="__unassigned__").map(({r,idx})=>(
+                  <span key={`u-${idx}`} style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11,background:"#FFF6E8",color:"#9A6B00",border:"1px solid #F4D39A",borderRadius:999,padding:"3px 6px 3px 8px"}}>
+                    📝 {r.task}
+                    <button onClick={(e)=>{e.stopPropagation(); removeRule(idx);}} style={{border:"none",background:P.coral,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:10,fontWeight:900,cursor:"pointer",lineHeight:1}}>✕</button>
+                  </span>
                 ))}
               </div>
 
@@ -1442,8 +1443,11 @@ function AgentCollaborationPanel({wsState}){
                   <span style={{fontSize:20}}>🤖</span>
                   <span style={{fontFamily:"Fredoka One,cursive",fontSize:14,color:P.ink,minWidth:68}}>{id}</span>
                   {handoffRules.filter(r=>r.to===id).length===0 && <span style={{fontSize:12,color:P.soft,fontStyle:"italic"}}>拖任务到这里…</span>}
-                  {handoffRules.filter(r=>r.to===id).map((r,i)=>(
-                    <Pill key={`${id}-${i}`} bg="#EAF7F2" border="#BFE8D8">📝 {r.task}</Pill>
+                  {handoffRules.map((r,idx)=>({r,idx})).filter(x=>x.r.to===id).map(({r,idx})=>(
+                    <span key={`${id}-${idx}`} style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:11,background:"#EAF7F2",color:P.teal,border:"1px solid #BFE8D8",borderRadius:999,padding:"3px 6px 3px 8px"}}>
+                      📝 {r.task}
+                      <button onClick={(e)=>{e.stopPropagation(); removeRule(idx);}} style={{border:"none",background:P.coral,color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:10,fontWeight:900,cursor:"pointer",lineHeight:1}}>✕</button>
+                    </span>
                   ))}
                 </div>
               ))}
