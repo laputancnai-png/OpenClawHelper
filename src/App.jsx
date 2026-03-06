@@ -137,7 +137,7 @@ const EASY_FIELDS=[
 ];
 
 const STEPS=[
-  {n:1,emoji:"🤖",label:"选助手"},{n:2,emoji:"📝",label:"写文档"},
+  {n:1,emoji:"🤖",label:"选助手"},{n:2,emoji:"📝",label:"写入职材料"},
   {n:3,emoji:"🔗",label:"连渠道"},{n:4,emoji:"🔒",label:"隐私"},{n:5,emoji:"🚀",label:"完成"},
 ];
 
@@ -392,7 +392,7 @@ function Step2({picked,souls,agentsDocs,userDocs,onSoulChange,onAgentsDocChange,
     <div className="slide-up">
       <div style={{textAlign:"center",marginBottom:24}}>
         <div style={{fontSize:44,marginBottom:8}}>📝</div>
-        <h2 style={{fontFamily:"Fredoka One,cursive",fontSize:26,color:P.ink,margin:"0 0 6px"}}>给每个助手完善文档</h2>
+        <h2 style={{fontFamily:"Fredoka One,cursive",fontSize:26,color:P.ink,margin:"0 0 6px"}}>给每个助手完善入职材料</h2>
         <p style={{fontSize:14,color:P.soft,margin:0}}>SOUL.md / AGENTS.md / USER.md 都可以在这里编辑</p>
       </div>
       {agents.length>1&&(
