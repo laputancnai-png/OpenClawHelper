@@ -1209,6 +1209,7 @@ function AgentCollaborationPanel({wsState}){
   const [agentIds, setAgentIds] = useState([]);
   const [enabled, setEnabled] = useState(false);
   const [allow, setAllow] = useState([]);
+  const [handoffRules, setHandoffRules] = useState([]);
 
   const loadConfig = useCallback(async () => {
     if (!wsConnected) {
@@ -1223,9 +1224,14 @@ function AgentCollaborationPanel({wsState}){
       const snap = await client.configGet();
       const list = (snap.config?.agents?.list ?? []).map(a => a.id).filter(Boolean);
       const a2a = snap.config?.tools?.agentToAgent ?? {};
+      const hints = Array.isArray(a2a.routingHints) ? a2a.routingHints : [];
       setAgentIds(list);
       setEnabled(!!a2a.enabled);
       setAllow(Array.isArray(a2a.allow) ? a2a.allow : []);
+      setHandoffRules(hints.map((r)=>({
+        task: String(r.task || "写作任务"),
+        to: String(r.to || list.find(id=>id!=="main") || "main"),
+      })));
       setStatus("idle");
     } catch (e) {
       setStatus("error");
@@ -1245,7 +1251,46 @@ function AgentCollaborationPanel({wsState}){
     const ids = Array.from(new Set(["main", ...agentIds.filter(id => id !== "main")]));
     setEnabled(true);
     setAllow(ids);
+    const specialist = agentIds.filter(id => id !== "main");
+    setHandoffRules([
+      { task: "写作任务", to: specialist.includes("writer") ? "writer" : (specialist[0] || "main") },
+      { task: "代码任务", to: specialist.includes("coder") ? "coder" : (specialist[0] || "main") },
+      { task: "资料收集", to: specialist.includes("researcher") ? "researcher" : (specialist[0] || "main") },
+    ]);
     setMessage("已应用推荐预设：让总管助手可以呼叫其他助手协作。");
+  };
+
+  const setRuleField = (idx, field, value) => {
+    setHandoffRules(prev => prev.map((r,i)=>i===idx?{...r,[field]:value}:r));
+  };
+
+  const addRule = () => {
+    const fallback = agentIds.find(id=>id!=="main") || "main";
+    setHandoffRules(prev => [...prev, { task: "新任务类型", to: fallback }]);
+  };
+
+  const removeRule = (idx) => {
+    setHandoffRules(prev => prev.filter((_,i)=>i!==idx));
+  };
+
+  const runCollabCheck = () => {
+    if (!enabled) {
+      setStatus("error");
+      setMessage("协作自检未通过：你还没开启“助手互相协作”。");
+      return;
+    }
+    if (!allow.includes("main")) {
+      setStatus("error");
+      setMessage("协作自检未通过：请允许“总管助手(main)”参与协作。 ");
+      return;
+    }
+    if (handoffRules.length === 0) {
+      setStatus("error");
+      setMessage("协作自检未通过：请至少配置 1 条任务分配规则。 ");
+      return;
+    }
+    setStatus("success");
+    setMessage("协作自检通过：总管助手已可按规则分配任务。 ");
   };
 
   const saveConfig = useCallback(async () => {
@@ -1265,6 +1310,7 @@ function AgentCollaborationPanel({wsState}){
             agentToAgent: {
               enabled,
               allow: Array.from(new Set(allow)),
+              routingHints: handoffRules.map(r => ({ task: r.task, to: r.to })),
             },
           },
         }, null, 2),
@@ -1278,7 +1324,7 @@ function AgentCollaborationPanel({wsState}){
       setStatus("error");
       setMessage(`保存失败：${e?.message ?? String(e)}`);
     }
-  }, [wsConnected, enabled, allow]);
+  }, [wsConnected, enabled, allow, handoffRules]);
 
   return (
     <div style={{background:P.white,borderRadius:18,padding:"16px 18px",marginBottom:14,
@@ -1291,6 +1337,7 @@ function AgentCollaborationPanel({wsState}){
         <div style={{display:"flex",gap:8}}>
           <Btn small ghost onClick={loadConfig}>刷新配置</Btn>
           <Btn small color={P.indigo} onClick={applySupervisorPreset}>一键推荐配置</Btn>
+          <Btn small color={P.amber} onClick={runCollabCheck}>协作自检</Btn>
           <Btn small color={P.teal} onClick={saveConfig} disabled={status==="saving"||!wsConnected}>{status==="saving"?"保存中…":"保存"}</Btn>
         </div>
       </div>
@@ -1313,6 +1360,28 @@ function AgentCollaborationPanel({wsState}){
             </button>
           );
         })}
+      </div>
+
+      <div style={{marginTop:14,background:"#FAFAFE",border:"2px solid #E8E8F5",borderRadius:14,padding:"12px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:800,color:P.soft}}>🧭 任务分配规则（第二版）</div>
+          <Btn small ghost onClick={addRule}>+ 添加规则</Btn>
+        </div>
+        {handoffRules.length===0 && <div style={{fontSize:12,color:P.soft}}>还没有规则。你可以点“添加规则”，告诉总管助手把什么任务交给谁。</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {handoffRules.map((r, idx)=>(
+            <div key={idx} style={{display:"grid",gridTemplateColumns:"1.4fr 1fr auto",gap:8,alignItems:"center"}}>
+              <input value={r.task} onChange={e=>setRuleField(idx,"task",e.target.value)}
+                placeholder="例如：写作任务 / 代码任务 / 资料收集"
+                style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}} />
+              <select value={r.to} onChange={e=>setRuleField(idx,"to",e.target.value)}
+                style={{padding:"8px 10px",borderRadius:10,border:"2px solid #E8E8F5",fontSize:12,background:P.white}}>
+                {agentIds.map(id => <option key={id} value={id}>{id}</option>)}
+              </select>
+              <Btn small color={P.coral} onClick={()=>removeRule(idx)}>删除</Btn>
+            </div>
+          ))}
+        </div>
       </div>
 
       {message && <div style={{marginTop:10,fontSize:12,fontWeight:700,color:status==="error"?P.coral:P.teal}}>{message}</div>}
