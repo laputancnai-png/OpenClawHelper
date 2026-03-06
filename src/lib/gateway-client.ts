@@ -54,7 +54,7 @@ export class GatewayRpcError extends Error {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PROTOCOL_VERSION = 3;
-const CLIENT_ID = "openclaw-control-ui";
+const CLIENT_ID = "webchat-ui";
 const CLIENT_VERSION = "0.1.0";
 const REQUEST_TIMEOUT_MS = 15_000;
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -250,10 +250,10 @@ export class GatewayClient {
               id: CLIENT_ID,
               version: CLIENT_VERSION,
               platform: "web",
-              mode: "ui",
+              mode: "webchat",
             },
             role: "operator",
-            scopes: ["operator.read", "operator.write"],
+            scopes: ["operator.read", "operator.write", "operator.admin"],
             caps: [],
             commands: [],
             permissions: {},
