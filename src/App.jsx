@@ -1203,6 +1203,7 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [hoverDeleteId, setHoverDeleteId] = useState("");
 
   const loadAgents = useCallback(async () => {
     if (!wsConnected) {
@@ -1320,10 +1321,32 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
                   transition:"all 0.18s ease",position:"relative"}}>
                 {a.id !== "main" && (
                   <button
+                    onMouseEnter={(e)=>{e.stopPropagation(); setHoverDeleteId(a.id);}}
+                    onMouseLeave={(e)=>{e.stopPropagation(); setHoverDeleteId("");}}
                     onClick={(e)=>{e.stopPropagation(); if(!deletingId) handleDeleteAgent(a.id);}}
                     title={`删除 ${a.id}`}
-                    style={{position:"absolute",top:8,right:8,width:24,height:24,borderRadius:"50%",border:"none",background:deleting?"#FFB4A6":P.coral,color:"#fff",fontWeight:900,cursor:deletingId?"wait":"pointer",lineHeight:1}}>
-                    {deleting?"…":"X"}
+                    style={{
+                      position:"absolute",
+                      top:-10,
+                      right:-10,
+                      width:30,
+                      height:30,
+                      borderRadius:"50%",
+                      border:"3px solid #fff",
+                      background:deleting?"#FFB4A6":(hoverDeleteId===a.id?"#FF5D40":P.coral),
+                      color:"#fff",
+                      fontSize:14,
+                      fontWeight:900,
+                      cursor:deletingId?"wait":"pointer",
+                      lineHeight:1,
+                      boxShadow:hoverDeleteId===a.id?"0 8px 20px #FF6B4A66":"0 4px 10px #FF6B4A44",
+                      transform:hoverDeleteId===a.id?"scale(1.08)":"scale(1)",
+                      transition:"all 0.18s ease",
+                      display:"flex",
+                      alignItems:"center",
+                      justifyContent:"center",
+                    }}>
+                    {deleting?"…":"✕"}
                   </button>
                 )}
                 <div style={{fontSize:30,marginBottom:6}}>{a.emoji}</div>
