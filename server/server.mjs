@@ -20,6 +20,8 @@ import path from "path";
 import os from "os";
 import { createReadStream } from "fs";
 import { fileURLToPath } from "url";
+import { execFile } from "child_process";
+import { promisify } from "util";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR  = path.resolve(__dirname, "../dist"); // Vite build output
@@ -28,6 +30,7 @@ const DIST_DIR  = path.resolve(__dirname, "../dist"); // Vite build output
 
 const PORT = 3131;
 const HOST = "127.0.0.1"; // loopback only — never expose externally
+const execFileAsync = promisify(execFile);
 
 // Resolve workspace: honours OPENCLAW_WORKSPACE env var, else default
 const WORKSPACE = process.env.OPENCLAW_WORKSPACE
@@ -89,6 +92,14 @@ function readBody(req) {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+async function runOpenclaw(args, timeoutMs = 120000) {
+  const { stdout, stderr } = await execFileAsync("openclaw", args, {
+    timeout: timeoutMs,
+    maxBuffer: 2 * 1024 * 1024,
+  });
+  return { stdout: stdout?.toString?.() ?? "", stderr: stderr?.toString?.() ?? "" };
 }
 
 
@@ -225,33 +236,77 @@ async function handleAgentDelete(req, res, agentId) {
   }
   if (agentId === "main") return json(res, 400, { error: "main agent cannot be deleted" });
 
-  const targets = [
-    path.join(OPENCLAW_HOME, `workspace-${agentId}`),
-    path.join(OPENCLAW_HOME, "agents", agentId),
-  ];
-
-  const removed = [];
-  const missing = [];
+  const report = { id: agentId, cronRemoved: [], removed: [], missing: [] };
 
   try {
+    // 1) Normalize agents.list and remove target agent
+    const listOut = await runOpenclaw(["config", "get", "agents.list", "--json"]);
+    const currList = JSON.parse(listOut.stdout || "[]");
+    const nextList = (Array.isArray(currList) ? currList : [])
+      .filter((a) => a?.id !== agentId)
+      .map((a) => a?.id === "main"
+        ? { ...a, workspace: `${OPENCLAW_HOME}/workspace`, agentDir: `${OPENCLAW_HOME}/agents/main/agent` }
+        : a
+      );
+    await runOpenclaw(["config", "set", "agents.list", JSON.stringify(nextList), "--strict-json"]);
+
+    // 2) Remove bindings for target agent
+    try {
+      const bindOut = await runOpenclaw(["config", "get", "bindings", "--json"]);
+      const currBindings = JSON.parse(bindOut.stdout || "[]");
+      const nextBindings = (Array.isArray(currBindings) ? currBindings : []).filter((b) => b?.agentId !== agentId);
+      await runOpenclaw(["config", "set", "bindings", JSON.stringify(nextBindings), "--strict-json"]);
+    } catch {
+      // ignore bindings if absent
+    }
+
+    // 3) Remove cron jobs for this agent (default)
+    try {
+      const cronOut = await runOpenclaw(["cron", "list", "--json"]);
+      const cron = JSON.parse(cronOut.stdout || "{}");
+      const jobs = cron?.jobs || [];
+      for (const j of jobs) {
+        if (j?.agentId === agentId && j?.id) {
+          try {
+            await runOpenclaw(["cron", "rm", String(j.id), "--json"]);
+            report.cronRemoved.push(String(j.id));
+          } catch {
+            // best effort
+          }
+        }
+      }
+    } catch {
+      // ignore cron failures
+    }
+
+    // 4) Remove directories
+    const targets = [
+      path.join(OPENCLAW_HOME, `workspace-${agentId}`),
+      path.join(OPENCLAW_HOME, "agents", agentId),
+    ];
+
     for (const t of targets) {
       if (!t.startsWith(OPENCLAW_HOME + path.sep)) {
         throw new Error(`Unsafe delete path: ${t}`);
       }
       try {
         await fs.rm(t, { recursive: true, force: false });
-        removed.push(t);
+        report.removed.push(t);
       } catch (e) {
         if (e?.code === "ENOENT") {
-          missing.push(t);
-          continue;
+          report.missing.push(t);
+        } else {
+          throw e;
         }
-        throw e;
       }
     }
-    return json(res, 200, { ok: true, id: agentId, removed, missing });
+
+    // 5) Restart gateway to apply and stabilize
+    try { await runOpenclaw(["gateway", "restart"]); } catch {}
+
+    return json(res, 200, { ok: true, report });
   } catch (e) {
-    return json(res, 500, { error: e.message, id: agentId, removed, missing });
+    return json(res, 500, { error: e?.message ?? String(e), report });
   }
 }
 

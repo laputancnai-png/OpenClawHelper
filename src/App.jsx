@@ -1274,73 +1274,9 @@ function ExistingAgentsPanel({wsState, onEditAgent}){
     setMessage("正在删除，请稍候（Gateway 会短暂重启）…");
 
     try {
-      const client = getGatewayClient();
-      const snapshot = await client.configGet();
-
-      const newAgentList = (snapshot.config?.agents?.list ?? []).filter(a => a.id !== agentId);
-      const newBindings = (snapshot.config?.bindings ?? []).filter(b => b.agentId !== agentId);
-
-      await client.configPatch({
-        raw: JSON.stringify({ agents: { list: newAgentList }, bindings: newBindings }, null, 2),
-        baseHash: snapshot.hash,
-        note: `OpenClawHelper: delete agent ${agentId}`,
-        restartDelayMs: 2000,
-      });
-
-      await new Promise(r => setTimeout(r, 2600));
-
-      // best-effort cleanup after restart
-      try {
-        const listed = await client.sessionsList(500);
-        const keys = (listed.sessions || []).map(s => s.key).filter(Boolean);
-        const targetKeys = keys.filter(k => k.startsWith(`agent:${agentId}:`) || k === `agent:${agentId}`);
-        for (const key of targetKeys) {
-          try { await client.sessionsDelete(key); } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
-
-      try {
-        const cron = await client.cronList();
-        const jobs = cron.jobs || [];
-        const targetCronIds = jobs.filter(j => j.agentId === agentId).map(j => j.id).filter(Boolean);
-        for (const id of targetCronIds) {
-          try { await client.cronRemove(id); } catch { /* ignore */ }
-        }
-      } catch { /* ignore */ }
-
       await deleteAgentFiles(agentId);
-
-      // verify result + invariants; self-heal with one more patch if needed
-      let verify = await client.configGet();
-      const curList = verify.config?.agents?.list ?? [];
-      const desiredList = curList
-        .filter(a => a.id !== agentId)
-        .map(a => a.id === "main"
-          ? { ...a, workspace: "/home/yufengw/.openclaw/workspace", agentDir: "/home/yufengw/.openclaw/agents/main/agent" }
-          : a
-        );
-
-      const listChanged = JSON.stringify(curList) !== JSON.stringify(desiredList);
-      if (listChanged) {
-        await client.configPatch({
-          raw: JSON.stringify({ agents: { list: desiredList } }, null, 2),
-          baseHash: verify.hash,
-          note: `OpenClawHelper: post-delete normalize ${agentId}`,
-          restartDelayMs: 1500,
-        });
-        await new Promise(r => setTimeout(r, 2200));
-        verify = await client.configGet();
-      }
-
-      const stillExists = (verify.config?.agents?.list ?? []).some(a => a.id === agentId);
-      const main = (verify.config?.agents?.list ?? []).find(a => a.id === "main");
-      const mainWorkspace = main?.workspace || verify.config?.agents?.defaults?.workspace || "";
-      if (stillExists) throw new Error(`删除未完成：${agentId} 仍在 agents.list 中`);
-      if (String(mainWorkspace).trim() !== "/home/yufengw/.openclaw/workspace") {
-        throw new Error(`main workspace 异常：${mainWorkspace}`);
-      }
-
-      setMessage(`已删除 Agent ${agentId}（配置、会话、cron、目录已清理）。`);
+      setMessage(`已删除 Agent ${agentId}（配置、cron、目录已清理并重启 Gateway）。`);
+      await new Promise(r => setTimeout(r, 1600));
       await loadAgents();
     } catch (e) {
       setMessage(`删除失败：${e?.message ?? String(e)}`);
