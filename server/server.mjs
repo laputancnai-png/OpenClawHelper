@@ -76,10 +76,9 @@ function resolveSafe(relPath) {
 
 function json(res, status, body) {
   const payload = JSON.stringify(body, null, 2);
-  const origin  = process.env.NODE_ENV === "production" ? "*" : "http://localhost:5173";
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin":  origin,
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
@@ -411,7 +410,7 @@ const server = http.createServer(async (req, res) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": "http://localhost:5173",
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });

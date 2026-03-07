@@ -27,7 +27,7 @@ export class GatewayRpcError extends Error {
   }
 }
 
-const RPC_URL = "http://127.0.0.1:3131/api/gateway-rpc";
+const RPC_URL = "/api/gateway-rpc";
 
 export class GatewayClient {
   state: ConnectionState = "connected";
