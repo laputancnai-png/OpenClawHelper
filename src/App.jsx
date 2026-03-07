@@ -830,10 +830,16 @@ function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnecte
       const untouched = existingList.filter(item => !pickedIds.has(item.id));
       newAgentList = [...untouched, ...patchedPicked];
     } else {
-      newAgentList = agents.map(a => managedAgentEntry(a.agentId));
-
-      // Always keep "main" in the list if it's not being replaced
       const existingList = snapshot.config?.agents?.list ?? [];
+      const selectedIds = new Set(agents.map(a => a.agentId));
+      const untouched = existingList.filter(item => !selectedIds.has(item.id));
+      const patchedSelected = agents.map(a => {
+        const existing = existingList.find(item => item.id === a.agentId);
+        return managedAgentEntry(a.agentId, existing ?? {});
+      });
+      newAgentList = [...untouched, ...patchedSelected];
+
+      // Ensure main is always present and normalized
       const hasMain = newAgentList.some(a => a.id === "main");
       if (!hasMain) {
         const existingMain = existingList.find(a => a.id === "main");
@@ -856,7 +862,10 @@ function Step5({picked,souls,agentsDocs,userDocs,rules,privacy,onEdit,wsConnecte
           ...(baseBindings || []).filter(b => !agents.some(a => a.agentId === b.agentId)),
           ...mappedBindings,
         ]
-      : mappedBindings;
+      : [
+          ...((snapshot.config?.bindings ?? []).filter(b => !agents.some(a => a.agentId === b.agentId))),
+          ...mappedBindings,
+        ];
 
     const patch = {
       agents: { list: newAgentList },
