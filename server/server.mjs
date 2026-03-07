@@ -22,6 +22,7 @@ import { createReadStream } from "fs";
 import { fileURLToPath } from "url";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR  = path.resolve(__dirname, "../dist"); // Vite build output
@@ -79,7 +80,7 @@ function json(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin":  origin,
-    "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(payload);
@@ -92,6 +93,22 @@ function readBody(req) {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+function sha256(text) {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+function deepMerge(target, patch) {
+  if (Array.isArray(patch)) return patch;
+  if (patch && typeof patch === "object") {
+    const out = (target && typeof target === "object" && !Array.isArray(target)) ? { ...target } : {};
+    for (const [k, v] of Object.entries(patch)) {
+      out[k] = deepMerge(out[k], v);
+    }
+    return out;
+  }
+  return patch;
 }
 
 async function runOpenclaw(args, timeoutMs = 120000) {
@@ -132,6 +149,64 @@ async function handleGatewayToken(req, res) {
     json(res, 200, { token });
   } catch (e) {
     json(res, 500, { error: e?.message ?? String(e), token: "" });
+  }
+}
+
+/** POST /api/gateway-rpc */
+async function handleGatewayRpc(req, res) {
+  try {
+    const body = await readBody(req);
+    const frame = JSON.parse(body || "{}");
+    const method = String(frame?.method || "");
+    const params = frame?.params || {};
+    const cfgPath = path.join(OPENCLAW_HOME, "openclaw.json");
+
+    if (method === "config.get") {
+      const raw = await fs.readFile(cfgPath, "utf8");
+      const config = JSON.parse(raw);
+      return json(res, 200, { ok: true, payload: { path: cfgPath, hash: sha256(raw), config } });
+    }
+
+    if (method === "config.patch") {
+      const raw = await fs.readFile(cfgPath, "utf8");
+      const oldHash = sha256(raw);
+      if (params?.baseHash && params.baseHash !== oldHash) {
+        return json(res, 409, { ok: false, error: { code: "BASE_HASH_MISMATCH", message: "Config changed, refresh and retry." } });
+      }
+      const config = JSON.parse(raw);
+      const patch = JSON.parse(String(params?.raw || "{}"));
+      const merged = deepMerge(config, patch);
+      const nextRaw = JSON.stringify(merged, null, 2);
+      await fs.writeFile(cfgPath, nextRaw, "utf8");
+      try { await runOpenclaw(["gateway", "restart"], 120000); } catch {}
+      return json(res, 200, { ok: true, payload: { changed: true, hash: sha256(nextRaw) } });
+    }
+
+    if (method === "sessions.list") {
+      return json(res, 200, { ok: true, payload: { sessions: [] } });
+    }
+
+    if (method === "sessions.delete") {
+      return json(res, 200, { ok: true, payload: { ok: true, key: params?.key || "", deleted: true } });
+    }
+
+    if (method === "cron.list") {
+      const out = await runOpenclaw(["cron", "list", "--json"], 120000);
+      const parsed = JSON.parse(out.stdout || "{}");
+      return json(res, 200, { ok: true, payload: parsed });
+    }
+
+    if (method === "cron.rm") {
+      const id = String(params?.id || "");
+      const out = await runOpenclaw(["cron", "rm", id, "--json"], 120000);
+      let parsed;
+      try { parsed = JSON.parse(out.stdout || "{}"); } catch { parsed = { ok: true }; }
+      return json(res, 200, { ok: true, payload: parsed });
+    }
+
+    return json(res, 404, { ok: false, error: { code: "METHOD_NOT_FOUND", message: `Unknown RPC method: ${method}` } });
+  } catch (e) {
+    return json(res, 500, { ok: false, error: { code: "RPC_ERROR", message: e?.message ?? String(e) } });
   }
 }
 
@@ -337,7 +412,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "http://localhost:5173",
-      "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     return res.end();
@@ -352,6 +427,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === "/api/gateway-token" && req.method === "GET") {
       return await handleGatewayToken(req, res);
+    }
+    if (pathname === "/api/gateway-rpc" && req.method === "POST") {
+      return await handleGatewayRpc(req, res);
     }
     if (pathname === "/api/file" && req.method === "GET") {
       return await handleFileRead(req, res, relPath);

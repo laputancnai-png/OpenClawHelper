@@ -1173,30 +1173,19 @@ function ConnectionBanner(){
   );
 }
 
-function ConnectionSettings({wsState, token, setToken, onSaveToken, onReconnect}){
+function ConnectionSettings({wsState}){
   const wsOk = wsState === "connected";
   return(
     <div style={{background:P.white,borderRadius:18,padding:"14px 16px",marginBottom:14,
       boxShadow:"0 4px 14px #0000000C",border:"2px solid #EBEBF8"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <div style={{fontSize:12,fontWeight:800,color:P.soft,letterSpacing:1}}>🔐 Gateway 连接设置</div>
+        <div style={{fontSize:12,fontWeight:800,color:P.soft,letterSpacing:1}}>🔐 Gateway 连接状态</div>
         <div style={{fontSize:12,fontWeight:700,color:wsOk?P.teal:(wsState==="reconnecting"?P.amber:P.coral)}}>
           {wsOk?"已连接":wsState==="reconnecting"?"重连中…":"未连接"}
         </div>
       </div>
-      <div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}>
-        <input
-          value={token}
-          onChange={e=>setToken(e.target.value)}
-          placeholder="粘贴 OpenClaw Gateway Token"
-          style={{flex:1,minWidth:280,padding:"10px 12px",borderRadius:12,border:"2px solid #E8E8F5",
-            fontSize:13,fontFamily:"Nunito,sans-serif",background:"#FAFAFE",color:P.ink}}
-        />
-        <Btn small color={P.indigo} onClick={onSaveToken}>💾 保存 Token</Btn>
-        <Btn small color={P.teal} onClick={onReconnect}>🔄 重新连接</Btn>
-      </div>
       <div style={{marginTop:8,fontSize:11,color:P.soft}}>
-        Token 保存在浏览器 localStorage，仅本机使用。
+        已自动从本机 OpenClaw 配置读取连接信息，无需手动填写 Token。
       </div>
     </div>
   );
@@ -1656,51 +1645,24 @@ export default function App(){
   const [rules,   setRules]   = useState([]);
   const [privacy, setPrivacy] = useState("per-channel-peer");
   const [wsState, setWsState] = useState("disconnected");
-  const [token, setToken] = useState(() => localStorage.getItem("openclaw_token") ?? "");
   const [editMode, setEditMode] = useState(false);
   const [baseAgentList, setBaseAgentList] = useState([]);
   const [baseBindings, setBaseBindings] = useState([]);
   const { readFile } = useFileServer();
 
-  const connectGateway = useCallback((nextToken) => {
+  const connectGateway = useCallback(() => {
     const client = getGatewayClient();
-    client.connect("ws://127.0.0.1:18789", nextToken || undefined).catch(()=>{});
+    client.connect("", undefined).catch(()=>{});
   }, []);
-
-  const saveToken = useCallback(() => {
-    localStorage.setItem("openclaw_token", token.trim());
-    connectGateway(token.trim());
-  }, [token, connectGateway]);
-
-  const reconnect = useCallback(() => {
-    connectGateway((localStorage.getItem("openclaw_token") ?? token).trim());
-  }, [connectGateway, token]);
 
   // Auto-connect to Gateway on mount
   useEffect(()=>{
     const client = getGatewayClient();
     setWsState(client.state);
     const unsub = client.onStateChange(setWsState);
-
-    const bootConnect = async () => {
-      let t = (localStorage.getItem("openclaw_token") ?? token).trim();
-      if (!t) {
-        try {
-          const r = await fetch("http://127.0.0.1:3131/api/gateway-token");
-          const j = await r.json();
-          t = String(j?.token || "").trim();
-          if (t) {
-            setToken(t);
-            localStorage.setItem("openclaw_token", t);
-          }
-        } catch {}
-      }
-      if (client.state === "disconnected") connectGateway(t);
-    };
-
-    bootConnect();
+    connectGateway();
     return unsub;
-  },[connectGateway, token]);
+  },[connectGateway]);
 
   const startEditExistingAgent = useCallback(async (agentId) => {
     const tmpl = AGENT_TEMPLATES.find(t => t.agentId === agentId);
@@ -1776,13 +1738,7 @@ export default function App(){
 
         {/* Main */}
         <div style={{maxWidth:880,margin:"36px auto 0",padding:"0 20px"}}>
-          <ConnectionSettings
-            wsState={wsState}
-            token={token}
-            setToken={setToken}
-            onSaveToken={saveToken}
-            onReconnect={reconnect}
-          />
+          <ConnectionSettings wsState={wsState} />
 
           {page === "home" && (
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
