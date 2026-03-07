@@ -122,6 +122,19 @@ async function handleHealth(req, res) {
   });
 }
 
+/** GET /api/gateway-token */
+async function handleGatewayToken(req, res) {
+  try {
+    const cfgPath = path.join(OPENCLAW_HOME, "openclaw.json");
+    const raw = await fs.readFile(cfgPath, "utf8");
+    const cfg = JSON.parse(raw);
+    const token = cfg?.gateway?.auth?.token || cfg?.gateway?.remote?.token || "";
+    json(res, 200, { token });
+  } catch (e) {
+    json(res, 500, { error: e?.message ?? String(e), token: "" });
+  }
+}
+
 /**
  * GET /api/workspace
  * Returns list of agents (from agents/<id>/ subdirs) and which workspace-<id>/SOUL.md files exist.
@@ -337,6 +350,9 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/workspace" && req.method === "GET") {
       return await handleWorkspace(req, res);
     }
+    if (pathname === "/api/gateway-token" && req.method === "GET") {
+      return await handleGatewayToken(req, res);
+    }
     if (pathname === "/api/file" && req.method === "GET") {
       return await handleFileRead(req, res, relPath);
     }
@@ -390,6 +406,7 @@ server.listen(PORT, HOST, () => {
 Endpoints:
   GET  /api/health
   GET  /api/workspace
+  GET  /api/gateway-token
   GET  /api/file?path=workspace-main/SOUL.md
   PUT  /api/file?path=workspace-main/SOUL.md
   PUT  /api/file?path=workspace-writer/SOUL.md

@@ -1681,11 +1681,26 @@ export default function App(){
     const client = getGatewayClient();
     setWsState(client.state);
     const unsub = client.onStateChange(setWsState);
-    if(client.state === "disconnected"){
-      connectGateway((localStorage.getItem("openclaw_token") ?? "").trim());
-    }
+
+    const bootConnect = async () => {
+      let t = (localStorage.getItem("openclaw_token") ?? token).trim();
+      if (!t) {
+        try {
+          const r = await fetch("http://127.0.0.1:3131/api/gateway-token");
+          const j = await r.json();
+          t = String(j?.token || "").trim();
+          if (t) {
+            setToken(t);
+            localStorage.setItem("openclaw_token", t);
+          }
+        } catch {}
+      }
+      if (client.state === "disconnected") connectGateway(t);
+    };
+
+    bootConnect();
     return unsub;
-  },[connectGateway]);
+  },[connectGateway, token]);
 
   const startEditExistingAgent = useCallback(async (agentId) => {
     const tmpl = AGENT_TEMPLATES.find(t => t.agentId === agentId);
